@@ -261,6 +261,245 @@ index 59c9792e..e3b2b024 100644
      sslVerify: resolved.sslVerify,
      clientCert: resolved.clientCert,
      clientKey: resolved.clientKey,
+diff --git a/src/agents/model-auth-availability.deterministic.test.ts b/src/agents/model-auth-availability.deterministic.test.ts
+new file mode 100644
+index 00000000..b438c996
+--- /dev/null
++++ b/src/agents/model-auth-availability.deterministic.test.ts
+@@ -0,0 +1,191 @@
++import { afterEach, describe, expect, it, vi } from "vitest";
++import { resolveModelsCommandReply } from "../auto-reply/reply/commands-models.js";
++import type { OpenClawConfig } from "../config/types.openclaw.js";
++import { createPluginMetadataSnapshotFixture } from "../plugins/plugin-metadata.test-support.js";
++import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
++import {
++  createModelAuthAvailabilityResolver,
++  type ModelAuthAvailabilityRef,
++} from "./model-auth-availability.js";
++import { createModelCatalogDecisions } from "./model-catalog-decisions.js";
++import * as preparedCatalog from "./prepared-model-catalog.js";
++import { setPreparedModelRuntimeAuthStore } from "./prepared-model-runtime-auth.js";
++import type { PreparedModelRuntimeSnapshot } from "./prepared-model-runtime.types.js";
++
++const entries = [
++  { provider: "dummy", id: "dummy", name: "Deterministic gateway" },
++  { provider: "dummy", id: "note", name: "Deterministic NOTE" },
++];
++const authStore = { version: 1 as const, profiles: {} };
++const metadataSnapshot = createPluginMetadataSnapshotFixture();
++
++function resolver(cfg: OpenClawConfig = {}) {
++  return createModelAuthAvailabilityResolver({
++    cfg,
++    env: {},
++    authStore,
++    metadataSnapshot,
++    preparedRuntimeAuthStore: authStore,
++    preparedSyntheticAuthComplete: true,
++    skipSetupProviderFallback: true,
++    allowPreparedRuntimeAuth: false,
++  });
++}
++
++describe("deterministic model readiness", () => {
++  afterEach(() => vi.restoreAllMocks());
++
++  it.each(["dummy", "note"])("makes dummy/%s ready without inventing credentials", (modelId) => {
++    const auth = resolver();
++    for (const evaluate of [auth.evaluateModelAuth, auth.evaluateRuntimeModelAuth]) {
++      expect(evaluate("dummy", { modelId })).toEqual({
++        availability: true,
++        routeResolution: null,
++      });
++    }
++    expect(auth.resolveProviderAuthAvailability("dummy")).not.toBe(true);
++    expect(auth.hasSyntheticAuth("dummy")).toBe(false);
++    expect(auth.providerDiscoveryProviderIds).not.toContain("dummy");
++    expect(authStore.profiles).toEqual({});
++  });
++
++  it.each([
++    ["dummy", undefined],
++    ["dummy", "other"],
++    ["dummy", "dummy/other"],
++    ["anthropic", "dummy"],
++    ["anthropic", "note"],
++    ["litellm", "dummy"],
++  ])("does not exempt %s/%s from its existing authentication", (provider, modelId) => {
++    const auth = resolver();
++    expect(auth.evaluateModelAuth(provider, { modelId }).availability).not.toBe(true);
++    expect(auth.evaluateRuntimeModelAuth(provider, { modelId }).availability).not.toBe(true);
++  });
++
++  it.each<ModelAuthAvailabilityRef>([
++    { api: "openai-completions" },
++    { baseUrl: "https://external.example/v1" },
++    { observedRoutes: [{ api: "openai-completions" }] },
++    { observedRoutes: [{ baseUrl: "https://external.example/v1" }] },
++    { runtimeId: "codex" },
++    { runtimeId: "external-runtime" },
++    { pinnedProfileId: "dummy:missing" },
++    { requiredProfileId: "dummy:missing" },
++  ])("does not treat an overridden deterministic route as authenticated: %j", (override) => {
++    const auth = resolver();
++    const ref = { modelId: "dummy", ...override };
++    expect(auth.evaluateModelAuth("dummy", ref).availability).not.toBe(true);
++    expect(auth.evaluateRuntimeModelAuth("dummy", ref).availability).not.toBe(true);
++  });
++
++  it.each<OpenClawConfig>([
++    {
++      models: {
++        providers: {
++          dummy: {
++            baseUrl: "https://external.example/v1",
++            api: "openai-completions",
++            models: [],
++          },
++        },
++      },
++    },
++    {
++      agents: {
++        defaults: { models: { "dummy/dummy": { agentRuntime: { id: "external-runtime" } } } },
++      },
++    },
++  ])("keeps configured provider and runtime overrides subject to auth: %j", (cfg) => {
++    const auth = resolver(cfg);
++    expect(auth.evaluateModelAuth("dummy", { modelId: "dummy" }).availability).not.toBe(true);
++    expect(auth.evaluateRuntimeModelAuth("dummy", { modelId: "dummy" }).availability).not.toBe(
++      true,
++    );
++  });
++
++  it("preserves authenticated external provider readiness", () => {
++    const auth = resolver({
++      models: {
++        providers: {
++          litellm: {
++            baseUrl: "https://external.example/v1",
++            api: "openai-completions",
++            apiKey: "synthetic-test-key",
++            models: [],
++          },
++        },
++      },
++    });
++    expect(auth.evaluateModelAuth("litellm", { modelId: "external-model" })).toMatchObject({
++      availability: true,
++      selectedAuthMode: "api-key",
++    });
++  });
++
++  it("keeps catalog decisions ready with an empty credential snapshot", async () => {
++    const cfg: OpenClawConfig = {
++      agents: { defaults: { model: "dummy/dummy" } },
++    };
++    const decisions = createModelCatalogDecisions({
++      cfg,
++      agentId: "main",
++      agentDir: "/tmp/deterministic-catalog-agent",
++      workspaceDir: "/tmp/deterministic-catalog",
++      snapshot: { entries, routeVariants: entries },
++      metadataSnapshot,
++      preparedAuthStore: authStore,
++      preparedSyntheticAuthComplete: true,
++      pluginRegistry: createEmptyPluginRegistry(),
++      isCurrent: () => true,
++    });
++    for (const entry of entries) {
++      const evaluation = await decisions.evaluateEntry(entry);
++      expect(decisions.evaluateNative(entry, evaluation).availability).toBe(true);
++      expect(await decisions.runtimeChoices(entry)).toEqual(["openclaw"]);
++    }
++  });
++
++  it("lists both deterministic models through /models without a sign-in notice", async () => {
++    const cfg: OpenClawConfig = {
++      agents: { defaults: { model: "dummy/dummy" } },
++    };
++    const owner: PreparedModelRuntimeSnapshot = {
++      catalogOwner: { agentId: "main", workspaceDir: "/tmp/deterministic-catalog" },
++      agentId: "main",
++      agentDir: "/tmp/deterministic-catalog-agent",
++      workspaceDir: "/tmp/deterministic-catalog",
++      activeProjectKeys: [],
++      config: cfg,
++      observationConfig: cfg,
++      authModes: {},
++      metadataSnapshot,
++      pluginRegistry: createEmptyPluginRegistry(),
++      isCurrent: () => true,
++      allowGatewaySubagentBinding: false,
++      modelCatalog: { entries, routeVariants: entries },
++      configuredRuntimeModels: [],
++      inlineProviderModels: [],
++      createStores() {
++        throw new Error("Model browsing must not execute a model");
++      },
++    };
++    setPreparedModelRuntimeAuthStore(owner, authStore);
++    vi.spyOn(preparedCatalog, "getPublishedPreparedModelCatalogOwnerSnapshot").mockReturnValue(
++      owner,
++    );
++    for (const commandBodyNormalized of ["/models", "/models dummy"]) {
++      const reply = await resolveModelsCommandReply({
++        cfg,
++        agentId: "main",
++        commandBodyNormalized,
++      });
++      expect(reply?.text).not.toContain("Sign-in needed");
++      expect(reply?.text).not.toContain("Connection not confirmed");
++      expect(reply?.text).toContain("dummy");
++      if (commandBodyNormalized === "/models dummy") {
++        expect(reply?.text).toContain("dummy/dummy");
++        expect(reply?.text).toContain("dummy/note");
++      }
++    }
++  });
++});
+diff --git a/src/agents/model-auth-availability.ts b/src/agents/model-auth-availability.ts
+index 15e43430..a2b2d1f8 100644
+--- a/src/agents/model-auth-availability.ts
++++ b/src/agents/model-auth-availability.ts
+@@ -56,6 +56,7 @@ import {
+   resolveCliRuntimeModelBackendBinding,
+ } from "./cli-backends.js";
+ import { resolveBundledCliBackendAuthPolicy } from "./cli-runner/cli-backend-auth-policy.js";
++import { isDeterministicGatewayModel } from "./deterministic-gateway-model.js";
+ import { resolveAgentHarnessPolicy } from "./harness/policy.js";
+ import {
+   listProviderEnvAuthLookupKeys,
+@@ -1099,6 +1100,29 @@ export function createModelAuthAvailabilityResolver(
+     ref: ModelAuthAvailabilityRef = {},
+   ): ModelAuthAvailabilityEvaluation => {
+     const provider = normalizeProviderIdForAuth(rawProvider);
++    if (
++      isDeterministicGatewayModel(provider, ref.modelId ?? "") &&
++      ref.api == null &&
++      ref.baseUrl == null &&
++      !ref.observedRoutes?.some((route) => route.api != null || route.baseUrl != null) &&
++      !ref.pinnedProfileId?.trim() &&
++      !ref.requiredProfileId?.trim() &&
++      !resolveMergedModelProviderConfig(params.cfg, provider)
++    ) {
++      const runtimeId =
++        ref.runtimeId ??
++        resolveAgentHarnessPolicy({
++          config: params.cfg,
++          agentId: params.agentId,
++          provider,
++          modelId: ref.modelId,
++          env: params.env,
++        }).runtime;
++      // Built-in deterministic routes execute locally and do not supply provider credentials.
++      if (runtimeId === "auto" || runtimeId === "openclaw") {
++        return { availability: true, routeResolution: null };
++      }
++    }
+     if (provider !== OPENAI_PROVIDER_ID) {
+       return {
+         ...resolveProviderEvaluation(provider, ref),
 diff --git a/src/agents/model-catalog.planning.test.ts b/src/agents/model-catalog.planning.test.ts
 index 998a9428..3c240b7f 100644
 --- a/src/agents/model-catalog.planning.test.ts

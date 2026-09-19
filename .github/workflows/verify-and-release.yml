@@ -106,6 +106,9 @@ jobs:
         run: |
           node scripts/run-vitest.mjs \
             src/agents/deterministic-gateway-model.test.ts \
+            src/agents/model-auth-availability.test.ts \
+            src/agents/model-auth-availability.deterministic.test.ts \
+            src/agents/model-catalog-decisions.test.ts \
             src/agents/mcp-transport-config.test.ts \
             src/agents/mcp-transport.test.ts \
             src/auto-reply/reply/directive-handling.defaults.test.ts \
