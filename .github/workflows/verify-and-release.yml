@@ -113,12 +113,15 @@ jobs:
             src/plugins/before-agent-reply.test.ts \
             src/agents/embedded-agent-runner/run.shared-integration.test.ts \
             src/agents/model-catalog.test.ts \
+            src/agents/model-catalog.planning.test.ts \
             src/agents/mcp-http-fetch.test.ts \
             src/config/schema.test.ts \
             test/scripts/runtime-postbuild.test.ts \
             src/commands/auth-choice.model-check.test.ts \
             src/commands/models/list.rows.activation.test.ts \
             src/plugins/providers.runtime.activation.test.ts \
+            src/plugins/provider-model-routes.cache.test.ts \
+            src/plugins/provider-policy-surface.test.ts \
             src/plugins/provider-hook-runtime.provenance.test.ts \
             src/plugins/providers.runtime.owner-completeness.test.ts \
             src/plugins/providers.runtime.consult-current-snapshot.test.ts \
