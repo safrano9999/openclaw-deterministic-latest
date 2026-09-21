@@ -30,12 +30,35 @@ class CorePinsTests(unittest.TestCase):
                         self.assertFalse(override)
                         return json.dumps({'sha': 'c' * 40})
                     return json.dumps([{'tag_name': '2026.9.5-deterministic.3'}])
-                with patch.object(pins.subprocess, 'check_output', side_effect=github):
+                with patch.dict(pins.os.environ, PATCH_COMMIT="f" * 40), patch.object(pins.subprocess, 'check_output', side_effect=github):
                     selected = pins.read_pins(root, build)
+                self.assertEqual(selected['needs_build'], 'true')
+                published = [{'tag_name': selected['release_tag'],
+                    'body': f"Build fingerprint: {selected['fingerprint']}.",
+                    'assets': [{'name': 'openclaw-2026.9.5-deterministic.tar.gz', 'digest': 'sha256:' + 'a' * 64}]}]
+                def existing(command, **kwargs):
+                    return json.dumps(published) if '/releases?' in command[-1] else github(command, **kwargs)
+                with patch.dict(pins.os.environ, PATCH_COMMIT='f' * 40), patch.object(pins.subprocess, 'check_output', side_effect=existing):
+                    self.assertEqual(pins.read_pins(root, build)['needs_build'], 'false')
+                with patch.dict(pins.os.environ, PATCH_COMMIT='d' * 40), patch.object(pins.subprocess, 'check_output', side_effect=existing):
+                    self.assertEqual(pins.read_pins(root, build)['needs_build'], 'true')
                 self.assertEqual(selected['upstream_sha'], override or 'c' * 40)
                 self.assertEqual(selected['ephemeral_sha'], 'e' * 40)
                 self.assertIn('OPENCLAW_UPSTREAM_SHA=' + (override or 'c' * 40), build.read_text())
-                self.assertIn('OPENCLAW_DETERMINISTIC_RELEASE_TAG=2026.9.5-deterministic.4', build.read_text())
+                self.assertEqual(selected['release_tag'], '2026.9.5-deterministic.4')
+                (root / 'fedora45-ai-core-pre/Containerfile').write_text(
+                    'ARG OPENCLAW_VERSION=2026.9.6\nARG OPENCLAW_UPSTREAM_SHA=\n')
+                def next_stable(command, **kwargs):
+                    if command[-1].endswith('/commits/v2026.9.6'):
+                        return json.dumps({'sha': '9' * 40})
+                    return github(command, **kwargs)
+                with patch.dict(pins.os.environ, PATCH_COMMIT='f' * 40), patch.object(pins.subprocess, 'check_output', side_effect=next_stable):
+                    updated = pins.read_pins(root, build)
+                self.assertEqual(updated['version'], '2026.9.6')
+                self.assertEqual(updated['upstream_sha'], '9' * 40)
+                self.assertEqual(updated['release_tag'], '2026.9.6-deterministic.1')
+                self.assertEqual(updated['needs_build'], 'true')
+
 
 
 if __name__ == '__main__':

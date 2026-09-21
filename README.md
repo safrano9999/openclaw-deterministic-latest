@@ -144,11 +144,14 @@ ARG OPENCLAW_UPSTREAM_SHA=1c4ee884396e509cc63abe87669e279e4e7d313c
 
 An empty SHA selects the official release tag for that version. An unchanged stable
 version preserves a manually selected SHA; a newer stable release updates the version
-and clears the override. The reusable build workflow is called by Core's manual
+and clears the override. The reusable build workflow is called automatically by Core's
 `openclaw-components.yml` workflow with its immutable source commit. It reads these
 arguments before checking out upstream and running tests. `build.conf` records the
 reviewed patch and toolchain; its effective upstream pin is derived from Core-pre.
-A newer version still requires a compatible, tested source patch.
+A newer Core-pre version reuses the patch only if it applies and passes all tests;
+failures publish nothing. Version selection never follows upstream main or latest.
+The automatic check skips unchanged successful inputs and records each new verified
+release and checksum in Core without starting an image build.
 
 The build uses upstream's own complete npm packer and its separate Codex plugin
 packer. This preserves the selected source's file rules, workspace packaging,

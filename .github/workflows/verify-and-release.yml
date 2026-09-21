@@ -16,6 +16,13 @@ on:
         description: Publish the tested runtime bundle
         type: boolean
         default: false
+    outputs:
+      version:
+        value: ${{ jobs.build.outputs.version }}
+      upstream_sha:
+        value: ${{ jobs.build.outputs.upstream_sha }}
+      release_tag:
+        value: ${{ jobs.build.outputs.release_tag }}
     secrets:
       source_token:
         required: true
@@ -29,6 +36,10 @@ concurrency:
 
 jobs:
   build:
+    outputs:
+      version: ${{ steps.core.outputs.version }}
+      upstream_sha: ${{ steps.core.outputs.upstream_sha }}
+      release_tag: ${{ steps.core.outputs.release_tag }}
     timeout-minutes: 60
     runs-on: ubuntu-24.04
 
@@ -66,6 +77,7 @@ jobs:
           printf 'CORE_SOURCE_COMMIT=%s\n' "$CORE_COMMIT" >> build.conf
 
       - name: Load exact pins
+        if: steps.core.outputs.needs_build == 'true'
         id: pins
         shell: bash
         run: |
@@ -76,7 +88,7 @@ jobs:
           [[ "$OPENCLAW_VERSION" =~ ^[0-9]{4}[.][0-9]+[.][0-9]+([-][A-Za-z0-9.]+)?$ ]]
           [[ "$OPENCLAW_UPSTREAM_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$OPENCLAW_PATCH_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          [[ "$OPENCLAW_PATCH_FILE" == "patches/openclaw-${OPENCLAW_VERSION}-deterministic.patch" || "$OPENCLAW_PATCH_FILE" == "patches/openclaw-${OPENCLAW_VERSION}-deterministic-main.patch" ]]
+          [[ "$OPENCLAW_PATCH_FILE" =~ ^patches/openclaw-[0-9.]+-deterministic(-main)?[.]patch$ ]]
           [[ "$OPENCLAW_BUILD_LABEL" == "${OPENCLAW_VERSION}-patched" ]]
           release_prefix="${OPENCLAW_VERSION}-deterministic."
           [[ "$OPENCLAW_DETERMINISTIC_RELEASE_TAG" == "$release_prefix"* ]]
@@ -98,6 +110,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Check out pinned OpenClaw source
+        if: steps.core.outputs.needs_build == 'true'
         uses: actions/checkout@v4
         with:
           repository: openclaw/openclaw
@@ -106,6 +119,7 @@ jobs:
           path: upstream
 
       - name: Verify pin and apply patch
+        if: steps.core.outputs.needs_build == 'true'
         shell: bash
         env:
           OPENCLAW_VERSION: ${{ steps.pins.outputs.version }}
@@ -122,12 +136,14 @@ jobs:
           git -C upstream apply "$GITHUB_WORKSPACE/$OPENCLAW_PATCH"
 
       - name: Set up exact pnpm
+        if: steps.core.outputs.needs_build == 'true'
         uses: pnpm/action-setup@v4
         with:
           version: ${{ steps.pins.outputs.pnpm_version }}
           run_install: false
 
       - name: Set up Node
+        if: steps.core.outputs.needs_build == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ steps.pins.outputs.node_version }}
@@ -135,15 +151,18 @@ jobs:
           cache-dependency-path: upstream/pnpm-lock.yaml
 
       - name: Test runtime bundle identity
+        if: steps.core.outputs.needs_build == 'true'
         run: |
           python3 .github/scripts/test-read-core-pins.py
           python3 .github/scripts/test-package-runtime.py
 
       - name: Install exact dependencies
+        if: steps.core.outputs.needs_build == 'true'
         working-directory: upstream
         run: pnpm install --frozen-lockfile
 
       - name: Run deterministic contract tests
+        if: steps.core.outputs.needs_build == 'true'
         working-directory: upstream
         run: |
           node scripts/run-vitest.mjs \
@@ -179,12 +198,14 @@ jobs:
             extensions/codex/src/session-catalog-index.test.ts --maxWorkers=4
 
       - name: Build OpenClaw
+        if: steps.core.outputs.needs_build == 'true'
         env:
           NODE_OPTIONS: --max-old-space-size=8192
         working-directory: upstream
         run: pnpm build
 
       - name: Verify built compatibility assets
+        if: steps.core.outputs.needs_build == 'true'
         working-directory: upstream
         run: |
           cmp src/agents/deterministic-gateway-replies.txt dist/deterministic-gateway-replies.txt
@@ -192,6 +213,7 @@ jobs:
           node scripts/check-package-dist-imports.mjs .
 
       - name: Pack the complete pinned runtime and Codex plugin
+        if: steps.core.outputs.needs_build == 'true'
         working-directory: upstream
         shell: bash
         run: |
@@ -206,6 +228,7 @@ jobs:
           cp "${codex_packages[0]}" "$GITHUB_WORKSPACE/packed/codex.tgz"
 
       - name: Check out Ephemeral selected by Core
+        if: steps.core.outputs.needs_build == 'true'
         uses: actions/checkout@v4
         with:
           repository: safrano9999/openclaw-ephemeral
@@ -213,6 +236,7 @@ jobs:
           path: ephemeral
 
       - name: Test Ephemeral against the built Core-pre selection
+        if: steps.core.outputs.needs_build == 'true'
         env:
           UPGRADE_TARGET_SOURCE: ${{ github.workspace }}/upstream
           UPGRADE_TARGET_PACKAGE: ${{ runner.temp }}/selected-runtime/node_modules/openclaw
@@ -227,6 +251,7 @@ jobs:
           python3 core-source/upgrade-loop/probes/openclaw_config.py
 
       - name: Package release assets
+        if: steps.core.outputs.needs_build == 'true'
         shell: bash
         env:
           DIST_ASSET: ${{ steps.pins.outputs.asset }}
@@ -246,6 +271,7 @@ jobs:
           )
 
       - name: Upload verified build artifacts
+        if: steps.core.outputs.needs_build == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: openclaw-${{ steps.pins.outputs.version }}-deterministic
@@ -253,7 +279,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish version-pinned release
-        if: inputs.publish == true
+        if: inputs.publish == true && steps.core.outputs.needs_build == 'true'
         env:
           GH_TOKEN: ${{ secrets.source_token }}
           OPENCLAW_VERSION: ${{ steps.pins.outputs.version }}
@@ -261,17 +287,18 @@ jobs:
           GH_REPO: safrano9999/openclaw-deterministic-latest
           PATCH_COMMIT: ${{ inputs.patch_source_commit }}
           RELEASE_TAG: ${{ steps.pins.outputs.release_tag }}
+          BUILD_FINGERPRINT: ${{ steps.core.outputs.fingerprint }}
         shell: bash
         run: |
           set -euo pipefail
           tag="$RELEASE_TAG"
           title="OpenClaw ${OPENCLAW_VERSION} deterministic patch"
-          notes="Pinned OpenClaw ${OPENCLAW_VERSION} deterministic patch and complete runtime bundle (OpenClaw plus Codex). Upstream source: ${OPENCLAW_UPSTREAM_SHA}."
+          notes="Pinned OpenClaw ${OPENCLAW_VERSION} deterministic patch and complete runtime bundle (OpenClaw plus Codex). Upstream source: ${OPENCLAW_UPSTREAM_SHA}. Build fingerprint: ${BUILD_FINGERPRINT}."
           gh release create "$tag" artifacts/* --target "$PATCH_COMMIT" \
             --title "$title" --notes "$notes" --latest=false
 
       - name: Publish latest release
-        if: inputs.publish == true
+        if: inputs.publish == true && steps.core.outputs.needs_build == 'true'
         env:
           GH_TOKEN: ${{ secrets.source_token }}
           OPENCLAW_VERSION: ${{ steps.pins.outputs.version }}

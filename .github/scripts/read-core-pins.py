@@ -2,6 +2,8 @@
 # Source of truth: SCRIPTS/githubactions. Generated copies are overwritten.
 """Resolve the Core-pre Containerfile's source selection before any build/test."""
 import argparse
+import hashlib
+import os
 import json
 from pathlib import Path
 import re
@@ -23,9 +25,12 @@ def read_pins(core: Path, build: Path) -> dict[str, str]:
     if not re.fullmatch(r"[0-9a-f]{40}", upstream):
         raise ValueError("Selected release did not resolve to a commit")
     pins = build.read_text()
-    # build.conf describes the reviewed patch/toolchain; Core-pre owns the target.
-    if re.findall(r"^OPENCLAW_VERSION=(.*)$", pins, re.M) != [version]:
-        raise ValueError("Port the Deterministic patch to the Core-pre version before building")
+    # Reuse the reviewed patch only if it applies and all compatibility tests pass.
+    # A new stable clears the Core-pre override; failed tests publish nothing.
+    for key, value in {"OPENCLAW_VERSION": version,
+                       "OPENCLAW_BUILD_LABEL": version + "-patched",
+                       "OPENCLAW_DETERMINISTIC_ASSET": f"openclaw-{version}-deterministic.tar.gz"}.items():
+        pins = re.sub(r"^" + key + r"=.*$", key + "=" + value, pins, flags=re.M)
     pins, count = re.subn(r"^OPENCLAW_UPSTREAM_SHA=.*$", "OPENCLAW_UPSTREAM_SHA=" + upstream, pins, flags=re.M)
     if count != 1:
         raise ValueError("Missing Deterministic source pin")
@@ -36,11 +41,23 @@ def read_pins(core: Path, build: Path) -> dict[str, str]:
     releases = json.loads(subprocess.check_output([
         "gh", "api", "repos/safrano9999/openclaw-deterministic-latest/releases?per_page=100",
     ], text=True))
+    identity = {"version": version, "upstream": upstream, "ephemeral": ephemeral[0],
+                "patch_source": os.environ["PATCH_COMMIT"],
+                "probes": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                           for p in sorted((core / "upgrade-loop/probes").glob("openclaw*"))}}
+    fingerprint = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+    asset = f"openclaw-{version}-deterministic.tar.gz"
+    for release in releases:
+        if (not release.get("draft") and not release.get("prerelease")
+                and release["tag_name"].startswith(version + "-deterministic.")
+                and f"Build fingerprint: {fingerprint}." in (release.get("body") or "")
+                and any(a["name"] == asset and re.fullmatch(r"sha256:[0-9a-f]{64}", a.get("digest", ""))
+                        for a in release.get("assets", []))):
+            return {"version": version, "upstream_sha": upstream, "ephemeral_sha": ephemeral[0],
+                    "needs_build": "false", "fingerprint": fingerprint, "release_tag": release["tag_name"]}
     prefix = version + "-deterministic."
     configured = re.findall(r"^OPENCLAW_DETERMINISTIC_RELEASE_TAG=" + re.escape(prefix) + r"(\d+)$", pins, re.M)
-    if len(configured) != 1:
-        raise ValueError("Invalid Deterministic release series")
-    revisions = [int(configured[0]) - 1]
+    revisions = [int(configured[0]) - 1] if configured else [0]
     for release in releases:
         tag = release["tag_name"]
         if tag.startswith(prefix) and tag[len(prefix):].isdigit():
@@ -49,7 +66,8 @@ def read_pins(core: Path, build: Path) -> dict[str, str]:
     pins = re.sub(r"^OPENCLAW_DETERMINISTIC_RELEASE_TAG=.*$",
                   "OPENCLAW_DETERMINISTIC_RELEASE_TAG=" + release_tag, pins, flags=re.M)
     build.write_text(pins)
-    return {"version": version, "upstream_sha": upstream, "ephemeral_sha": ephemeral[0]}
+    return {"version": version, "upstream_sha": upstream, "ephemeral_sha": ephemeral[0],
+            "needs_build": "true", "fingerprint": fingerprint, "release_tag": release_tag}
 
 
 if __name__ == "__main__":
