@@ -2,30 +2,68 @@
 name: openclaw-deterministic-latest build_asset
 
 on:
-  push:
-    tags:
-      - "20*.*.*"
-  workflow_dispatch:
+  workflow_call:
     inputs:
+      core_source_commit:
+        description: Immutable Core-pre source of truth
+        type: string
+        required: true
+      patch_source_commit:
+        description: Exact Deterministic patch/workflow source
+        type: string
+        required: true
       publish:
-        description: Publish the verified release assets
+        description: Publish the tested runtime bundle
         type: boolean
         default: false
+    secrets:
+      source_token:
+        required: true
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.repository }}
+  group: openclaw-deterministic-release
   cancel-in-progress: false
 
 jobs:
   build:
+    timeout-minutes: 60
     runs-on: ubuntu-24.04
 
     steps:
       - name: Check out patch source
         uses: actions/checkout@v4
+        with:
+          repository: safrano9999/openclaw-deterministic-latest
+          token: ${{ secrets.source_token }}
+          ref: ${{ inputs.patch_source_commit }}
+
+      - name: Check out immutable Core source of truth
+        uses: actions/checkout@v4
+        with:
+          repository: safrano9999/fedora45-ai-safrano9999
+          ref: ${{ inputs.core_source_commit }}
+          token: ${{ secrets.source_token }}
+          path: core-source
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Read target and Ephemeral source from Core-pre
+        id: core
+        env:
+          GH_TOKEN: ${{ secrets.source_token }}
+          CORE_COMMIT: ${{ inputs.core_source_commit }}
+          PATCH_COMMIT: ${{ inputs.patch_source_commit }}
+        run: |
+          [[ "$CORE_COMMIT" =~ ^[0-9a-f]{40}$ && "$PATCH_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git -C core-source rev-parse HEAD)" = "$CORE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$PATCH_COMMIT"
+          python3 .github/scripts/read-core-pins.py core-source build.conf >> "$GITHUB_OUTPUT"
+          printf 'CORE_SOURCE_COMMIT=%s\n' "$CORE_COMMIT" >> build.conf
 
       - name: Load exact pins
         id: pins
@@ -36,10 +74,10 @@ jobs:
           source build.conf
           set +a
           [[ "$OPENCLAW_VERSION" =~ ^[0-9]{4}[.][0-9]+[.][0-9]+([-][A-Za-z0-9.]+)?$ ]]
-          [[ "$OPENCLAW_IMAGE" =~ ^(docker[.]io|ghcr[.]io)/openclaw/openclaw:[A-Za-z0-9._-]+(@sha256:[0-9a-f]{64})?$ ]]
           [[ "$OPENCLAW_UPSTREAM_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$OPENCLAW_PATCH_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          [[ "$OPENCLAW_PATCH_FILE" == "patches/openclaw-${OPENCLAW_VERSION}-deterministic.patch" ]]
+          [[ "$OPENCLAW_PATCH_FILE" == "patches/openclaw-${OPENCLAW_VERSION}-deterministic.patch" || "$OPENCLAW_PATCH_FILE" == "patches/openclaw-${OPENCLAW_VERSION}-deterministic-main.patch" ]]
+          [[ "$OPENCLAW_BUILD_LABEL" == "${OPENCLAW_VERSION}-patched" ]]
           release_prefix="${OPENCLAW_VERSION}-deterministic."
           [[ "$OPENCLAW_DETERMINISTIC_RELEASE_TAG" == "$release_prefix"* ]]
           [[ "${OPENCLAW_DETERMINISTIC_RELEASE_TAG#"$release_prefix"}" =~ ^[0-9]+$ ]]
@@ -51,7 +89,6 @@ jobs:
           test "$actual_patch_sha" = "$OPENCLAW_PATCH_SHA256"
           {
             printf 'version=%s\n' "$OPENCLAW_VERSION"
-            printf 'image=%s\n' "$OPENCLAW_IMAGE"
             printf 'upstream_sha=%s\n' "$OPENCLAW_UPSTREAM_SHA"
             printf 'patch=%s\n' "$OPENCLAW_PATCH_FILE"
             printf 'release_tag=%s\n' "$OPENCLAW_DETERMINISTIC_RELEASE_TAG"
@@ -97,6 +134,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: upstream/pnpm-lock.yaml
 
+      - name: Test runtime bundle identity
+        run: |
+          python3 .github/scripts/test-read-core-pins.py
+          python3 .github/scripts/test-package-runtime.py
+
       - name: Install exact dependencies
         working-directory: upstream
         run: pnpm install --frozen-lockfile
@@ -129,7 +171,12 @@ jobs:
             src/plugins/providers.runtime.owner-completeness.test.ts \
             src/plugins/providers.runtime.consult-current-snapshot.test.ts \
             src/config/plugin-auto-enable.core.test.ts \
-            src/commands/model-picker.test.ts --maxWorkers=4
+            src/commands/model-picker.test.ts \
+            src/agents/prepared-model-catalog-worker.pool.integration.test.ts \
+            src/agents/prepared-model-catalog-worker.secrets.test.ts \
+            extensions/codex/src/session-catalog-backoff.test.ts \
+            extensions/codex/src/session-catalog-index-events.test.ts \
+            extensions/codex/src/session-catalog-index.test.ts --maxWorkers=4
 
       - name: Build OpenClaw
         env:
@@ -144,6 +191,41 @@ jobs:
           node openclaw.mjs --version
           node scripts/check-package-dist-imports.mjs .
 
+      - name: Pack the complete pinned runtime and Codex plugin
+        working-directory: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/package-openclaw-for-docker.mjs \
+            --skip-build --allow-unreleased-changelog \
+            --output-dir "$GITHUB_WORKSPACE/packed" --output-name openclaw.tgz
+          OPENCLAW_PLUGIN_NPM_PACK_OUTPUT_DIR="$GITHUB_WORKSPACE/packed/codex" \
+            bash scripts/plugin-npm-publish.sh --pack extensions/codex
+          mapfile -t codex_packages < <(find "$GITHUB_WORKSPACE/packed/codex" -maxdepth 1 -name '*.tgz' -type f)
+          test "${#codex_packages[@]}" -eq 1
+          cp "${codex_packages[0]}" "$GITHUB_WORKSPACE/packed/codex.tgz"
+
+      - name: Check out Ephemeral selected by Core
+        uses: actions/checkout@v4
+        with:
+          repository: safrano9999/openclaw-ephemeral
+          ref: ${{ steps.core.outputs.ephemeral_sha }}
+          path: ephemeral
+
+      - name: Test Ephemeral against the built Core-pre selection
+        env:
+          UPGRADE_TARGET_SOURCE: ${{ github.workspace }}/upstream
+          UPGRADE_TARGET_PACKAGE: ${{ runner.temp }}/selected-runtime/node_modules/openclaw
+          UPGRADE_TARGET_CODEX_PACKAGE: ${{ runner.temp }}/selected-runtime/node_modules/@openclaw/codex
+          UPGRADE_TARGET_VERSION: ${{ steps.pins.outputs.version }}
+          UPGRADE_TARGET_UPSTREAM_SHA: ${{ steps.pins.outputs.upstream_sha }}
+          PYTHONPATH: ${{ github.workspace }}/ephemeral
+        run: |
+          npm install --prefix "$RUNNER_TEMP/selected-runtime" --ignore-scripts --omit=dev \
+            --no-audit --no-fund "$GITHUB_WORKSPACE/packed/openclaw.tgz" "$GITHUB_WORKSPACE/packed/codex.tgz"
+          python3 -m unittest discover -s ephemeral/tests -v
+          python3 core-source/upgrade-loop/probes/openclaw_config.py
+
       - name: Package release assets
         shell: bash
         env:
@@ -152,9 +234,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
-            -cf - -C upstream dist \
-            | gzip -n > "artifacts/$DIST_ASSET"
+          python3 .github/scripts/package-runtime.py \
+            packed/openclaw.tgz packed/codex.tgz build.conf "artifacts/$DIST_ASSET"
           patch_asset="$(basename -- "$PATCH_FILE")"
           cp -- "$PATCH_FILE" "artifacts/$patch_asset"
           cp build.conf artifacts/build.conf
@@ -172,46 +253,42 @@ jobs:
           if-no-files-found: error
 
       - name: Publish version-pinned release
-        if: inputs.publish == true || startsWith(github.ref, 'refs/tags/20')
+        if: inputs.publish == true
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.source_token }}
           OPENCLAW_VERSION: ${{ steps.pins.outputs.version }}
-          OPENCLAW_IMAGE: ${{ steps.pins.outputs.image }}
+          OPENCLAW_UPSTREAM_SHA: ${{ steps.pins.outputs.upstream_sha }}
+          GH_REPO: safrano9999/openclaw-deterministic-latest
+          PATCH_COMMIT: ${{ inputs.patch_source_commit }}
           RELEASE_TAG: ${{ steps.pins.outputs.release_tag }}
         shell: bash
         run: |
           set -euo pipefail
           tag="$RELEASE_TAG"
           title="OpenClaw ${OPENCLAW_VERSION} deterministic patch"
-          notes="Pinned OpenClaw ${OPENCLAW_VERSION} deterministic patch and built dist assets. Runtime image: ${OPENCLAW_IMAGE}."
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" artifacts/* --clobber
-            gh release edit "$tag" --title "$title" --notes "$notes" --latest=false
-          else
-            gh release create "$tag" artifacts/* \
-              --target "$GITHUB_SHA" \
-              --title "$title" \
-              --notes "$notes" \
-              --latest=false
-          fi
+          notes="Pinned OpenClaw ${OPENCLAW_VERSION} deterministic patch and complete runtime bundle (OpenClaw plus Codex). Upstream source: ${OPENCLAW_UPSTREAM_SHA}."
+          gh release create "$tag" artifacts/* --target "$PATCH_COMMIT" \
+            --title "$title" --notes "$notes" --latest=false
 
       - name: Publish latest release
-        if: inputs.publish == true || startsWith(github.ref, 'refs/tags/20')
+        if: inputs.publish == true
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.source_token }}
           OPENCLAW_VERSION: ${{ steps.pins.outputs.version }}
-          OPENCLAW_IMAGE: ${{ steps.pins.outputs.image }}
+          OPENCLAW_UPSTREAM_SHA: ${{ steps.pins.outputs.upstream_sha }}
+          GH_REPO: safrano9999/openclaw-deterministic-latest
+          PATCH_COMMIT: ${{ inputs.patch_source_commit }}
         shell: bash
         run: |
           set -euo pipefail
           tag=latest
-          notes="Latest OpenClaw ${OPENCLAW_VERSION} deterministic assets. Runtime image: ${OPENCLAW_IMAGE}. Current source tag: ${GITHUB_REF_NAME}."
+          notes="Latest OpenClaw ${OPENCLAW_VERSION} deterministic patch and complete runtime bundle. Upstream source: ${OPENCLAW_UPSTREAM_SHA}. Patch source: ${PATCH_COMMIT}."
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" artifacts/* --clobber
             gh release edit "$tag" --title "$tag" --notes "$notes" --latest
           else
             gh release create "$tag" artifacts/* \
-              --target "$GITHUB_SHA" \
+              --target "$(git rev-parse HEAD)" \
               --title "$tag" \
               --notes "$notes" \
               --latest

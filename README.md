@@ -1,7 +1,7 @@
 # OpenClaw Deterministic Latest
 
 [![Pinned version](https://img.shields.io/badge/OpenClaw-2026.9.5-111827)](#version-pin)
-[![Patch](https://img.shields.io/badge/patch-dummy%2Fdummy%20%7C%20dummy%2Fnote-2563eb)](patches/openclaw-2026.9.5-deterministic.patch)
+[![Patch](https://img.shields.io/badge/patch-dummy%2Fdummy%20%7C%20dummy%2Fnote-2563eb)](patches/openclaw-2026.9.5-deterministic-main.patch)
 [![Image chain](https://img.shields.io/badge/images-Fedora%2045%20latest-0ea5e9)](https://github.com/safrano9999/fedora45-ai-safrano9999/blob/main/README.md)
 
 The independently maintained, exact deterministic gateway patch used by the
@@ -16,13 +16,13 @@ GitHub fork and has no pull-request relationship to another repository.
 The canonical patch is:
 
 ```text
-patches/openclaw-2026.9.5-deterministic.patch
+patches/openclaw-2026.9.5-deterministic-main.patch
 ```
 
 SHA-256:
 
 ```text
-cad154fb1576f5569b5caf5db6c8c2eefe41a5e8f9cb134e61bd1e03de6e17a8
+d4f7f966cc64e5a95982d858a9327bc2e3c819883e97496e8ad318000ffda1dd
 ```
 
 It contains the deterministic, per-server MCP private-network and provider
@@ -129,27 +129,40 @@ not a `2026.9.5` build-verification artifact.
 
 ## Version pin
 
-The patch applies only to OpenClaw `2026.9.5`, upstream commit
-`ec9c1a13db8938e5a3eaa51fca2e981cde2395a9`.
-The complete machine-readable build input is recorded in [build.conf](build.conf).
-Its corresponding upstream runtime image is `ghcr.io/openclaw/openclaw:2026.9.5`.
-The artifact build uses Node `26.8.2` and pnpm `12.4.0`; the Fedora image uses its
-own DNF-provided Node runtime.
+The current patch is ported to OpenClaw `2026.9.5` at main commit
+`1c4ee884396e509cc63abe87669e279e4e7d313c`, including upstream #153041 and #153038.
+The released `.5` patch is retained as
+`patches/openclaw-2026.9.5-deterministic.patch` for comparison.
 
-```bash
-git apply patches/openclaw-2026.9.5-deterministic.patch
+The source of truth for builds and compatibility tests is the consuming repository's
+`fedora45-ai-core-pre/Containerfile`:
+
+```dockerfile
+ARG OPENCLAW_VERSION=2026.9.5
+ARG OPENCLAW_UPSTREAM_SHA=1c4ee884396e509cc63abe87669e279e4e7d313c
 ```
 
-There is no automatic forward-port or compatibility layer. A newer OpenClaw
-version requires an explicit new patch and release.
+An empty SHA selects the official release tag for that version. An unchanged stable
+version preserves a manually selected SHA; a newer stable release updates the version
+and clears the override. The reusable build workflow is called by Core's manual
+`openclaw-components.yml` workflow with its immutable source commit. It reads these
+arguments before checking out upstream and running tests. `build.conf` records the
+reviewed patch and toolchain; its effective upstream pin is derived from Core-pre.
+A newer version still requires a compatible, tested source patch.
 
-Provider policy preparation reuses upstream's existing plugin-cache generation across model catalog rows, including missing policies and snapshot-scoped aliases. Bundled-root selection and registry-version changes invalidate these facts; model hooks still run for each model. The focused regression checks that 200 additional catalog rows cause no repeated inventory traversal or artifact loading after preparation.
+The build uses upstream's own complete npm packer and its separate Codex plugin
+packer. This preserves the selected source's file rules, workspace packaging,
+dependency versions and exports. The runtime bundle contains `openclaw.tgz`,
+`codex.tgz`, and a manifest with source identity and checksums. It is not a raw
+source-build `dist` overlay. Ephemeral's unit tests and Core's runtime compatibility
+probe run against this same built selection before publication.
 
-The pinned release target is
-[`2026.9.5-deterministic.1`](https://github.com/safrano9999/openclaw-deterministic-latest/releases/tag/2026.9.5-deterministic.1),
-with asset `openclaw-2026.9.5-deterministic.tar.gz` and its SHA-256 sidecar.
-The workflow uploads verification artifacts before optional release publication;
-manual dispatch defaults to `publish=false`.
+Machine version remains `2026.9.5`; the separate display label is
+`2026.9.5-patched`. The updater therefore waits for the next stable version.
+Release revisions are unique and versioned assets are not overwritten.
+
+The `.3` release series is prepared in source only. No runtime or image build has
+been started for this change; the previous `.2` artifact does not contain these fixes.
 
 ## Public package
 
@@ -163,6 +176,11 @@ The distribution is intentionally split into three public repositories:
 
 The current image integration starts at
 [fedora45-ai-safrano9999](https://github.com/safrano9999/fedora45-ai-safrano9999)'s Core layer:
+
+Core installs the verified Deterministic archive directly, then adds Ephemeral
+in a separate step. Ephemeral does not embed or rebuild this package. The Core
+installer validates provenance and archive contents, then installs the complete
+matching npm runtime and Codex plugin. This also updates dependencies and exports.
 
 ```text
 ghcr.io/safrano9999/fedora45-ai-core:latest
