@@ -8,8 +8,8 @@ index 8ec447a..83529b8 100644
    outputs["build-info.json"] = hashVitestWorkerArtifact(buildInfo);
 +  // Compiled subprocesses share the operator-replaceable deterministic reply asset.
 +  const repliesSource = path.join(root, "src/agents/deterministic-gateway-replies.txt");
-+  recordInput(repliesSource);
 +  const replies = fs.readFileSync(repliesSource);
++  inputs[repliesSource] ??= hashVitestWorkerArtifact(replies);
 +  fs.writeFileSync(path.join(outDir, "deterministic-gateway-replies.txt"), replies, { flag: "wx" });
 +  outputs["deterministic-gateway-replies.txt"] = hashVitestWorkerArtifact(replies);
    const sortedInputs = Object.fromEntries(
