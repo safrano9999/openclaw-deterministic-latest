@@ -24,10 +24,10 @@ index 534b885..a8e6875 100644
    runPhase("bundled hook metadata", () => copyHookMetadata(phaseParams));
    runPhase("official channel catalog", () => writeOfficialChannelCatalog(phaseParams));
 +  runPhase("deterministic gateway reply", () => {
-+    fsImpl.copyFileSync(
-+      path.join(rootDir, "src/agents/deterministic-gateway-replies.txt"),
-+      path.join(rootDir, "dist/deterministic-gateway-replies.txt"),
-+    );
++    const repliesSource = path.join(rootDir, "src/agents/deterministic-gateway-replies.txt");
++    if (fsImpl.existsSync(repliesSource)) {
++      fsImpl.copyFileSync(repliesSource, path.join(rootDir, "dist/deterministic-gateway-replies.txt"));
++    }
 +  });
    runPhase("export HTML assets", () => copyExportHtmlTemplates(phaseParams));
    runPhase("bundled plugin runtime overlay", () => stageBundledPluginRuntime(phaseParams));
