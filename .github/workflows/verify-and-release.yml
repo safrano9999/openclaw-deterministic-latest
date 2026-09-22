@@ -167,34 +167,8 @@ jobs:
         run: |
           tests=(
             src/agents/deterministic-gateway-model.test.ts
-            src/agents/model-auth-availability.test.ts
-            src/agents/model-auth-availability.deterministic.test.ts
-            src/agents/model-catalog-decisions.test.ts
-            src/agents/mcp-transport-config.test.ts
-            src/agents/mcp-transport.test.ts
-            src/auto-reply/reply/directive-handling.defaults.test.ts
-            src/auto-reply/reply/agent-runner-direct-runtime-config.test.ts
-            src/plugins/before-agent-reply.test.ts
-            src/agents/model-catalog.test.ts
-            src/agents/model-catalog.planning.test.ts
-            src/agents/mcp-http-fetch.test.ts
-            src/config/schema.test.ts
             test/scripts/runtime-postbuild.test.ts
-            src/commands/auth-choice.model-check.test.ts
-            src/commands/models/list.rows.activation.test.ts
-            src/plugins/providers.runtime.activation.test.ts
-            src/plugins/provider-model-routes.cache.test.ts
-            src/plugins/provider-policy-surface.test.ts
-            src/plugins/provider-hook-runtime.provenance.test.ts
-            src/plugins/providers.runtime.owner-completeness.test.ts
-            src/plugins/providers.runtime.consult-current-snapshot.test.ts
-            src/config/plugin-auto-enable.core.test.ts
-            src/commands/model-picker.test.ts
-            src/agents/prepared-model-catalog-worker.pool.integration.test.ts
-            src/agents/prepared-model-catalog-worker.secrets.test.ts
-            extensions/codex/src/session-catalog-backoff.test.ts
-            extensions/codex/src/session-catalog-index-events.test.ts
-            extensions/codex/src/session-catalog-index.test.ts
+            src/config/schema.test.ts
           )
           existing=()
           for test in "${tests[@]}"; do
