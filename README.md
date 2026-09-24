@@ -1,7 +1,7 @@
 # OpenClaw Deterministic Latest
 
-[![Pinned version](https://img.shields.io/badge/OpenClaw-2026.9.5-111827)](#version-pin)
-[![Patch](https://img.shields.io/badge/patch-dummy%2Fdummy%20%7C%20dummy%2Fnote-2563eb)](patches/openclaw-2026.9.5-deterministic-main.patch)
+[![Pinned version](https://img.shields.io/badge/OpenClaw-2026.9.6-111827)](#version-pin)
+[![Patch](https://img.shields.io/badge/patch-dummy%2Fdummy%20%7C%20dummy%2Fnote-2563eb)](patches/openclaw-2026.9.6-deterministic-main.patch)
 [![Image chain](https://img.shields.io/badge/images-Fedora%2045%20latest-0ea5e9)](https://github.com/safrano9999/fedora45-ai-safrano9999/blob/main/README.md)
 
 The independently maintained, exact deterministic gateway patch used by the
@@ -16,13 +16,13 @@ GitHub fork and has no pull-request relationship to another repository.
 The canonical patch is:
 
 ```text
-patches/openclaw-2026.9.5-deterministic-main.patch
+patches/openclaw-2026.9.6-deterministic-main.patch
 ```
 
 SHA-256:
 
 ```text
-d4f7f966cc64e5a95982d858a9327bc2e3c819883e97496e8ad318000ffda1dd
+dd7a80bd5ce992c39ad2189f50cd08d53ce79f6405b39b50827fa48d7595c8a1
 ```
 
 It contains the deterministic, per-server MCP private-network and provider
@@ -35,7 +35,7 @@ The [previous 2026.7.1 patch](patches/openclaw-2026.7.1-deterministic.patch),
 [2026.9.3 patch](patches/openclaw-2026.9.3-deterministic.patch), and
 [2026.9.4 patch](patches/openclaw-2026.9.4-deterministic.patch) are retained for comparison. The current port follows upstream's new owners:
 
-| Contract | 2026.7.1 patch | 2026.9.5 port / upstream equivalent |
+| Contract | 2026.7.1 patch | 2026.9.6 port / upstream equivalent |
 |---|---|---|
 | Fixed reply and NOTE precedence | Early fallback in `get-reply.ts` | Admitted-run `before-agent-reply.ts` owner; handled replies retain durable recovery bookkeeping. Deterministic turns skip model-backed maintenance. |
 | Hook model identity | Added provider/model context fields | Upstream already supplies `modelProviderId` and `modelId`; no duplicate patch. |
@@ -45,7 +45,7 @@ The [previous 2026.7.1 patch](patches/openclaw-2026.7.1-deterministic.patch),
 | Model-list activation cost | Per-row plugin activation | Reuse the existing operation-owned activation and same-turn auto-enable cache, including persisted manifest metadata; preserve aliases, provider normalization, freshness and lifecycle invalidation. |
 | MCP private networking | Per-server explicit opt-in | Current transport and the shared `zod-schema.mcp-server.ts` retain the opt-in; default SSRF protection and upstream OAuth/timeout handling remain intact. |
 
-The 2026.9.5 port follows upstream's shared MCP schema and inferred config types,
+The 2026.9.6 port follows upstream's shared MCP schema and inferred config types,
 its prepared manifest-row planner, and its provider-policy artifact cache. The
 previous outer provider cache is removed because upstream now owns the same
 prepared facts with registry-version and bundled-root invalidation. Operation-scoped
@@ -113,7 +113,7 @@ immediately. Commands and plugin hooks remain ahead of the fallback.
 Click either screenshot to open its MP4 recording.
 
 These recordings predate the `2026.7.1` port. They demonstrate routing behavior,
-not byte-exact release wording or `2026.9.5` build/runtime verification; the
+not byte-exact release wording or `2026.9.6` build/runtime verification; the
 canonical behavior is the version-pinned patch in this repository.
 
 ### NOTE full mode
@@ -125,21 +125,21 @@ through `/note show`.
 ![NOTE full mode in Telegram](https://raw.githubusercontent.com/safrano9999/NOTE/2026.7.36/docs/full-mode.jpg)
 
 The NOTE screenshot is a workflow illustration captured on OpenClaw `2026.6.11`,
-not a `2026.9.5` build-verification artifact.
+not a `2026.9.6` build-verification artifact.
 
 ## Version pin
 
-The current patch is ported to OpenClaw `2026.9.5` at main commit
-`1c4ee884396e509cc63abe87669e279e4e7d313c`, including upstream #153041 and #153038.
+The current patch is ported to OpenClaw `2026.9.6` at main commit
+`eb377ac59e6c9fd6c7705028034812becf00271b`.
 The released `.5` patch is retained as
-`patches/openclaw-2026.9.5-deterministic.patch` for comparison.
+`patches/openclaw-2026.9.5-deterministic-main.patch` for comparison.
 
 The source of truth for builds and compatibility tests is the consuming repository's
 `fedora45-ai-core-pre/Containerfile`:
 
 ```dockerfile
-ARG OPENCLAW_VERSION=2026.9.5
-ARG OPENCLAW_UPSTREAM_SHA=1c4ee884396e509cc63abe87669e279e4e7d313c
+ARG OPENCLAW_VERSION=2026.9.6
+ARG OPENCLAW_UPSTREAM_SHA=eb377ac59e6c9fd6c7705028034812becf00271b
 ```
 
 An empty SHA selects the official release tag for that version. An unchanged stable
@@ -160,12 +160,12 @@ dependency versions and exports. The runtime bundle contains `openclaw.tgz`,
 source-build `dist` overlay. Ephemeral's unit tests and Core's runtime compatibility
 probe run against this same built selection before publication.
 
-Machine version remains `2026.9.5`; the separate display label is
-`2026.9.5-patched`. The updater therefore waits for the next stable version.
+Machine version is `2026.9.6`; the separate display label is
+`2026.9.6-patched`. The updater therefore waits for the next stable version.
 Release revisions are unique and versioned assets are not overwritten.
 
-The `.3` release series is prepared in source only. No runtime or image build has
-been started for this change; the previous `.2` artifact does not contain these fixes.
+The `.1` release series is prepared in source only. No runtime or image build has
+been started for this change; no `.6` artifact exists until GitHub Actions publishes it.
 
 ## Public package
 

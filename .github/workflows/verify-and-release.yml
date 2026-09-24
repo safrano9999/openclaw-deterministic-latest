@@ -16,6 +16,11 @@ on:
         description: Publish the tested runtime bundle
         type: boolean
         default: false
+      target_version:
+        description: Optional OpenClaw version to build before Core-pre records it
+        type: string
+        required: false
+        default: ''
     outputs:
       version:
         value: ${{ jobs.build.outputs.version }}
@@ -69,6 +74,7 @@ jobs:
           GH_TOKEN: ${{ secrets.source_token }}
           CORE_COMMIT: ${{ inputs.core_source_commit }}
           PATCH_COMMIT: ${{ inputs.patch_source_commit }}
+          TARGET_OPENCLAW_VERSION: ${{ inputs.target_version }}
         run: |
           [[ "$CORE_COMMIT" =~ ^[0-9a-f]{40}$ && "$PATCH_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$(git -C core-source rev-parse HEAD)" = "$CORE_COMMIT"

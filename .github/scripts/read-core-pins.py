@@ -17,8 +17,11 @@ def read_pins(core: Path, build: Path) -> dict[str, str]:
         if len(found) != 1:
             raise ValueError("Invalid Core-pre source pin: " + name)
         return found[0]
-    version = arg("OPENCLAW_VERSION", r"\d+\.\d+\.\d+")
-    override = arg("OPENCLAW_UPSTREAM_SHA", r"(?:[0-9a-f]{40})?")
+    requested_version = os.environ.get("TARGET_OPENCLAW_VERSION", "").strip()
+    if requested_version and not re.fullmatch(r"\d+\.\d+\.\d+", requested_version):
+        raise ValueError("Invalid requested OpenClaw target version")
+    version = requested_version or arg("OPENCLAW_VERSION", r"\d+\.\d+\.\d+")
+    override = "" if requested_version else arg("OPENCLAW_UPSTREAM_SHA", r"(?:[0-9a-f]{40})?")
     upstream = override or json.loads(subprocess.check_output([
         "gh", "api", f"repos/openclaw/openclaw/commits/v{version}",
     ], text=True))["sha"]
