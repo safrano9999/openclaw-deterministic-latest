@@ -8,8 +8,8 @@ index 23fd9938..cdaad54a 100644
    outputs["build-info.json"] = hashVitestWorkerArtifact(buildInfo);
 +  // Compiled subprocesses share the same operator-replaceable reply asset as dist builds.
 +  const repliesSource = path.join(root, "src/agents/deterministic-gateway-replies.txt");
-+  recordInput(repliesSource);
 +  const replies = fs.readFileSync(repliesSource);
++  inputs[repliesSource] ??= hashVitestWorkerArtifact(replies);
 +  fs.writeFileSync(path.join(outDir, "deterministic-gateway-replies.txt"), replies, { flag: "wx" });
 +  outputs["deterministic-gateway-replies.txt"] = hashVitestWorkerArtifact(replies);
    const sortedInputs = Object.fromEntries(

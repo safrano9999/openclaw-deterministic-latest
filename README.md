@@ -22,7 +22,7 @@ patches/openclaw-2026.9.6-deterministic-main.patch
 SHA-256:
 
 ```text
-dd7a80bd5ce992c39ad2189f50cd08d53ce79f6405b39b50827fa48d7595c8a1
+373e7ef2e0f3b4f9668e03d3524c66f88bbea506964e81dcd7e8d83437fdb29a
 ```
 
 It contains the deterministic, per-server MCP private-network and provider
