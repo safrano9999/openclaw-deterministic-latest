@@ -439,7 +439,7 @@ index 00000000..b438c996
 +      },
 +    };
 +    setPreparedModelRuntimeAuthStore(owner, authStore);
-+    vi.spyOn(preparedCatalog, "getPublishedPreparedModelCatalogOwnerSnapshot").mockReturnValue(
++    vi.spyOn(preparedCatalog, "loadPublishedPreparedModelCatalogOwnerSnapshot").mockResolvedValue(
 +      owner,
 +    );
 +    for (const commandBodyNormalized of ["/models", "/models dummy"]) {
@@ -2966,3 +2966,27 @@ index 00000000..00000000 100644
          visibilityPolicy.allowAny ||
          [...visibilityPolicy.allowedKeys].some((key) => key.startsWith(`${provider}/`))),
    );
+
+diff --git a/src/agents/prepared-model-catalog.worker.ts b/src/agents/prepared-model-catalog.worker.ts
+index 00000000..00000000 100644
+--- a/src/agents/prepared-model-catalog.worker.ts
++++ b/src/agents/prepared-model-catalog.worker.ts
+@@ -41,6 +41,7 @@ import { replaceRuntimeAuthProfileStoreSnapshots } from "./auth-profiles/runtime-snapshots.js";
+ import { loadAuthProfileStoreWithoutExternalProfiles } from "./auth-profiles/store-runtime.js";
+ import { preserveResolvedSecretBackedCredentials } from "./auth-profiles/store.js";
+ import { prepareModelCatalogAuthLabels } from "./model-catalog-auth-labels.js";
++import { DETERMINISTIC_GATEWAY_PROVIDER } from "./deterministic-gateway-model.js";
+ import { resolveImplicitProviderDiscoveryScope } from "./models-config.providers.discovery-scope.js";
+@@ -249,7 +250,11 @@ export async function runPreparedModelCatalogWorkerRequest(
+-    const resolveSyntheticCredentials = (providerIds: readonly string[]) =>
+-      withPluginRuntimeGenerationScope(pluginGenerationScope, () =>
++    const resolveSyntheticCredentials = (providerIds: readonly string[]) => {
++      const credentials = withPluginRuntimeGenerationScope(pluginGenerationScope, () =>
+         resolveAmbientAgentCredentialsForDiscovery({
+@@
+           ...(value.input.workspaceDir ? { workspaceDir: value.input.workspaceDir } : {}),
+         }),
+       );
++      delete credentials[DETERMINISTIC_GATEWAY_PROVIDER];
++      return credentials;
++    };
