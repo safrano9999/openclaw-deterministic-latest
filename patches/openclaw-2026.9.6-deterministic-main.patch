@@ -2971,13 +2971,7 @@ diff --git a/src/agents/prepared-model-catalog.worker.ts b/src/agents/prepared-m
 index 00000000..00000000 100644
 --- a/src/agents/prepared-model-catalog.worker.ts
 +++ b/src/agents/prepared-model-catalog.worker.ts
-@@ -41,4 +41,5 @@ import { replaceRuntimeAuthProfileStoreSnapshots } from "./auth-profiles/runtime-snapshots.js";
- import { loadAuthProfileStoreWithoutExternalProfiles } from "./auth-profiles/store-runtime.js";
- import { preserveResolvedSecretBackedCredentials } from "./auth-profiles/store.js";
- import { prepareModelCatalogAuthLabels } from "./model-catalog-auth-labels.js";
-+import { DETERMINISTIC_GATEWAY_PROVIDER } from "./deterministic-gateway-model.js";
- import { resolveImplicitProviderDiscoveryScope } from "./models-config.providers.discovery-scope.js";
-@@ -250,19 +251,22 @@ export async function runPreparedModelCatalogWorkerRequest(
+@@ -250,19 +250,22 @@ export async function runPreparedModelCatalogWorkerRequest(
 -    const resolveSyntheticCredentials = (providerIds: readonly string[]) =>
 -      withPluginRuntimeGenerationScope(pluginGenerationScope, () =>
 +    const resolveSyntheticCredentials = (providerIds: readonly string[]) => {
@@ -2999,6 +2993,6 @@ index 00000000..00000000 100644
            ...(value.input.workspaceDir ? { workspaceDir: value.input.workspaceDir } : {}),
          }),
        );
-+      delete credentials[DETERMINISTIC_GATEWAY_PROVIDER];
++      delete credentials["dummy"];
 +      return credentials;
 +    };
