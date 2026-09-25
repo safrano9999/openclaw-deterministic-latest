@@ -3026,3 +3026,34 @@ index 00000000..00000000 100644
      if (request.kind === "auth-refresh") {
        const authStore = refreshAuthStore({
          agentDir: value.input.agentDir,
+@@ -280,12 +280,13 @@ async function runCatalogRequest(
+       const credentials = {
+         ...resolveSyntheticCredentials(request.providerIds),
+         ...resolveAgentCredentialMapFromStore(authStore, { config: value.input.config }),
+       };
++      delete credentials[DETERMINISTIC_GATEWAY_PROVIDER];
+       return {
+         status: "ok",
+         kind: "auth-refresh",
+         generationFingerprint,
+         authStore,
+         credentials,
+         authModes: resolveUsableAgentCredentialModes(credentials),
+       };
+@@ -308,15 +308,16 @@ async function runCatalogRequest(
+     const ambientCredentials = resolveSyntheticCredentials(
+       request.providerIds ?? value.providerIds,
+     );
+     const startupProviderIds = new Set(value.providerIds.map(normalizeProviderId));
+     const credentials = {
+       ...ambientCredentials,
+       ...resolveAgentCredentialMapFromStore(authStore, { config: value.input.config }),
+     };
++    delete credentials[DETERMINISTIC_GATEWAY_PROVIDER];
+     const exactAgentFacts = {
+       ...prepared.agentFacts,
+       input: value.input,
+       env: value.input.env,
+       authStore,
+       templateAuthStorage: AuthStorage.inMemory(credentials),
+       credentials,
