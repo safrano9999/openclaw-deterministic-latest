@@ -2979,7 +2979,11 @@ index 00000000..00000000 100644
  import { prepareModelCatalogAuthLabels } from "./model-catalog-auth-labels.js";
 +import { DETERMINISTIC_GATEWAY_PROVIDER } from "./deterministic-gateway-model.js";
  import { createPreparedModelCatalogProviderNormalizer } from "./model-catalog-provider-normalizer.js";
-@@ -188,7 +188,7 @@ export function createFullModelCatalogAccess(
+@@ -184,11 +184,11 @@ export function createFullModelCatalogAccess(
+      () =>
+        prepareModelCatalogAuthLabels({
+          config: params.agentFacts.input.config,
+          agentDir: params.agentFacts.input.agentDir,
           workspaceDir: params.agentFacts.input.workspaceDir,
           env: params.agentFacts.env,
           store: params.agentFacts.authStore,
