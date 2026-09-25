@@ -2986,7 +2986,7 @@ index 00000000..00000000 100644
            ...(value.input.workspaceDir ? { workspaceDir: value.input.workspaceDir } : {}),
          }),
        );
-+      delete credentials["dummy"];
++      if (request.kind === "auth-refresh") delete credentials["dummy"];
 +      return credentials;
 +    };
      if (request.kind === "auth-refresh") {
