@@ -2972,12 +2972,15 @@ index 00000000..00000000 100644
 --- a/src/agents/prepared-model-runtime.catalog-access.ts
 +++ b/src/agents/prepared-model-runtime.catalog-access.ts
 @@ -6,6 +6,7 @@ import {
+ import {
+   augmentPreparedModelCatalogWithAgentHarness,
    isPreparedNativeModelCatalogReady,
  } from "./harness/model-catalog.js";
  import { prepareModelCatalogAuthLabels } from "./model-catalog-auth-labels.js";
 +import { DETERMINISTIC_GATEWAY_PROVIDER } from "./deterministic-gateway-model.js";
  import { createPreparedModelCatalogProviderNormalizer } from "./model-catalog-provider-normalizer.js";
-@@ -172,10 +173,17 @@ export function createFullModelCatalogAccess(
+@@ -172,10 +173,15 @@ export function createFullModelCatalogAccess(
+     inventory.catalog.entries = inventory.catalog.entries.filter(retain);
      inventory.catalog.routeVariants = inventory.catalog.routeVariants.filter(retain);
    }
 +  const currentCredentials = Object.fromEntries(
@@ -3013,7 +3016,7 @@ index 00000000..00000000 100644
          resolveAmbientAgentCredentialsForDiscovery({
            config: value.input.config,
            env: value.input.env,
-@@ -266,2 +266,5 @@ async function runCatalogRequest(
+@@ -266,6 +266,9 @@ async function runCatalogRequest(
            ...(value.input.workspaceDir ? { workspaceDir: value.input.workspaceDir } : {}),
          }),
        );
