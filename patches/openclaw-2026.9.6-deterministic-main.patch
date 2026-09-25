@@ -2935,7 +2935,7 @@ index 00000000..00000000 100644
 @@ -356,6 +357,24 @@ async function projectPreparedModelsProviderData(
      }
    };
-
+ 
 +  const deterministicNativeEntries = catalog.filter(
 +    (entry) =>
 +      isDeterministicGatewayModel(entry.provider, entry.id) &&
@@ -2971,7 +2971,7 @@ diff --git a/src/agents/prepared-model-catalog.worker.ts b/src/agents/prepared-m
 index 00000000..00000000 100644
 --- a/src/agents/prepared-model-catalog.worker.ts
 +++ b/src/agents/prepared-model-catalog.worker.ts
-@@ -41,6 +41,7 @@ import { replaceRuntimeAuthProfileStoreSnapshots } from "./auth-profiles/runtime-snapshots.js";
+@@ -41,4 +41,5 @@ import { replaceRuntimeAuthProfileStoreSnapshots } from "./auth-profiles/runtime-snapshots.js";
  import { loadAuthProfileStoreWithoutExternalProfiles } from "./auth-profiles/store-runtime.js";
  import { preserveResolvedSecretBackedCredentials } from "./auth-profiles/store.js";
  import { prepareModelCatalogAuthLabels } from "./model-catalog-auth-labels.js";
