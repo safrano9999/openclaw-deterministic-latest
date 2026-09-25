@@ -2971,7 +2971,10 @@ diff --git a/src/agents/prepared-model-catalog.worker.ts b/src/agents/prepared-m
 index 00000000..00000000 100644
 --- a/src/agents/prepared-model-catalog.worker.ts
 +++ b/src/agents/prepared-model-catalog.worker.ts
-@@ -250,19 +250,22 @@ export async function runPreparedModelCatalogWorkerRequest(
+@@ -247,8 +247,8 @@ async function runCatalogRequest(
+       metadataSnapshot: prepared.pluginGeneration.pluginMetadataSnapshot,
+       pluginRegistry: prepared.pluginGeneration.pluginRegistry,
+     };
 -    const resolveSyntheticCredentials = (providerIds: readonly string[]) =>
 -      withPluginRuntimeGenerationScope(pluginGenerationScope, () =>
 +    const resolveSyntheticCredentials = (providerIds: readonly string[]) => {
@@ -2979,20 +2982,13 @@ index 00000000..00000000 100644
          resolveAmbientAgentCredentialsForDiscovery({
            config: value.input.config,
            env: value.input.env,
-           authoritativeSyntheticAuthProviderRefs:
-             pluginGenerationScope.metadataSnapshot.owners.cliBackends.keys(),
-           syntheticAuthProviderRefs: scopeSyntheticAuthProviderRefs(
-             [
-               ...new Set([
-                 ...resolveRuntimeSyntheticAuthProviderRefs(),
-                 ...request.syntheticAuth.map(({ providerRef }) => providerRef),
-               ]),
-             ],
-             providerIds,
-           ),
+@@ -266,6 +266,9 @@ async function runCatalogRequest(
            ...(value.input.workspaceDir ? { workspaceDir: value.input.workspaceDir } : {}),
          }),
        );
 +      delete credentials["dummy"];
 +      return credentials;
 +    };
+     if (request.kind === "auth-refresh") {
+       const authStore = refreshAuthStore({
+         agentDir: value.input.agentDir,
