@@ -2979,21 +2979,12 @@ index 00000000..00000000 100644
  import { prepareModelCatalogAuthLabels } from "./model-catalog-auth-labels.js";
 +import { DETERMINISTIC_GATEWAY_PROVIDER } from "./deterministic-gateway-model.js";
  import { createPreparedModelCatalogProviderNormalizer } from "./model-catalog-provider-normalizer.js";
-@@ -172,10 +173,15 @@ export function createFullModelCatalogAccess(
-     inventory.catalog.entries = inventory.catalog.entries.filter(retain);
-     inventory.catalog.routeVariants = inventory.catalog.routeVariants.filter(retain);
-   }
-+  const currentCredentials = Object.fromEntries(
-+    Object.entries(params.agentFacts.credentials).filter(
-+      ([provider]) => normalizeProvider(provider) !== DETERMINISTIC_GATEWAY_PROVIDER,
-+    ),
-+  );
-   const currentAuth = {
-     authStore: params.agentFacts.authStore,
--    credentials: params.agentFacts.credentials,
--    authModes: resolveUsableAgentCredentialModes(params.agentFacts.credentials),
-+    credentials: currentCredentials,
-+    authModes: resolveUsableAgentCredentialModes(currentCredentials),
-     providerAuthLabels: withPluginRuntimeGenerationScope(
-       {
-         metadataSnapshot: params.pluginGeneration.pluginMetadataSnapshot,
+@@ -188,7 +188,7 @@ export function createFullModelCatalogAccess(
+          workspaceDir: params.agentFacts.input.workspaceDir,
+          env: params.agentFacts.env,
+          store: params.agentFacts.authStore,
+-          providers: eligibleProviders,
++          providers: [...eligibleProviders, DETERMINISTIC_GATEWAY_PROVIDER],
+        }),
+    ),
+  };
