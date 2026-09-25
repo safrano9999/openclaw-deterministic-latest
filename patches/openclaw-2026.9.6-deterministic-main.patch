@@ -2982,7 +2982,7 @@ index 00000000..00000000 100644
          resolveAmbientAgentCredentialsForDiscovery({
            config: value.input.config,
            env: value.input.env,
-@@ -266,6 +266,9 @@ async function runCatalogRequest(
+@@ -266,6 +266,8 @@ async function runCatalogRequest(
            ...(value.input.workspaceDir ? { workspaceDir: value.input.workspaceDir } : {}),
          }),
        );
