@@ -2977,13 +2977,25 @@ index 00000000..00000000 100644
  import { prepareModelCatalogAuthLabels } from "./model-catalog-auth-labels.js";
 +import { DETERMINISTIC_GATEWAY_PROVIDER } from "./deterministic-gateway-model.js";
  import { resolveImplicitProviderDiscoveryScope } from "./models-config.providers.discovery-scope.js";
-@@ -249,7 +250,11 @@ export async function runPreparedModelCatalogWorkerRequest(
+@@ -250,19 +250,23 @@ export async function runPreparedModelCatalogWorkerRequest(
 -    const resolveSyntheticCredentials = (providerIds: readonly string[]) =>
 -      withPluginRuntimeGenerationScope(pluginGenerationScope, () =>
 +    const resolveSyntheticCredentials = (providerIds: readonly string[]) => {
 +      const credentials = withPluginRuntimeGenerationScope(pluginGenerationScope, () =>
          resolveAmbientAgentCredentialsForDiscovery({
-@@
+           config: value.input.config,
+           env: value.input.env,
+           authoritativeSyntheticAuthProviderRefs:
+             pluginGenerationScope.metadataSnapshot.owners.cliBackends.keys(),
+           syntheticAuthProviderRefs: scopeSyntheticAuthProviderRefs(
+             [
+               ...new Set([
+                 ...resolveRuntimeSyntheticAuthProviderRefs(),
+                 ...request.syntheticAuth.map(({ providerRef }) => providerRef),
+               ]),
+             ],
+             providerIds,
+           ),
            ...(value.input.workspaceDir ? { workspaceDir: value.input.workspaceDir } : {}),
          }),
        );
