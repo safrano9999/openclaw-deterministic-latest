@@ -2920,3 +2920,49 @@ index 35f61c54..2bf99d32 100644
      writeUpdateCompatibilityBuildFixture(rootDir);
      runRuntimePostBuild({
        rootDir,
+
+diff --git a/src/auto-reply/reply/commands-models-catalog.ts b/src/auto-reply/reply/commands-models-catalog.ts
+index 00000000..00000000 100644
+--- a/src/auto-reply/reply/commands-models-catalog.ts
++++ b/src/auto-reply/reply/commands-models-catalog.ts
+@@ -1,5 +1,6 @@
+ import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
+ import { resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
++import { isDeterministicGatewayModel } from "../../agents/deterministic-gateway-model.js";
+ import { listCliRuntimeModelBackendBindings } from "../../agents/cli-backends.js";
+ import {
+   createModelCatalogDecisions,
+@@ -356,6 +357,24 @@ async function projectPreparedModelsProviderData(
+     }
+   };
+
++  const deterministicNativeEntries = catalog.filter(
++    (entry) =>
++      isDeterministicGatewayModel(entry.provider, entry.id) &&
++      entry.api == null &&
++      entry.baseUrl == null,
++  );
++  for (const entry of deterministicNativeEntries) {
++    if (
++      await hasAuth(entry.provider, {
++        modelId: entry.id,
++        api: entry.api,
++        baseUrl: entry.baseUrl,
++      })
++    ) {
++      add(entry.provider, entry.id);
++    }
++  }
++
+   for (const entry of visibleCatalog) {
+     if (incompatibleModelKeys.has(resolveModelCatalogIdentityKey(entry))) {
+       continue;
+@@ -396,7 +414,8 @@ async function projectPreparedModelsProviderData(
+   const pendingProviders = decisions.snapshot.pendingProviders?.filter(
+     (provider) =>
+       isModelsBrowseVisibleProvider(provider) &&
++      !(deterministicNativeEntries.length > 0 && normalizeProviderId(provider) === "dummy") &&
+       (options.view === "all" ||
+         visibilityPolicy.allowAny ||
+         [...visibilityPolicy.allowedKeys].some((key) => key.startsWith(`${provider}/`))),
+   );
