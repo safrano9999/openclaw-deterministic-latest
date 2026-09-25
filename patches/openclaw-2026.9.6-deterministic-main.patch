@@ -2967,10 +2967,41 @@ index 00000000..00000000 100644
          [...visibilityPolicy.allowedKeys].some((key) => key.startsWith(`${provider}/`))),
    );
 
+diff --git a/src/agents/prepared-model-runtime.catalog-access.ts b/src/agents/prepared-model-runtime.catalog-access.ts
+index 00000000..00000000 100644
+--- a/src/agents/prepared-model-runtime.catalog-access.ts
++++ b/src/agents/prepared-model-runtime.catalog-access.ts
+@@ -8,6 +8,7 @@ import {
+   isPreparedNativeModelCatalogReady,
+ } from "./harness/model-catalog.js";
+ import { prepareModelCatalogAuthLabels } from "./model-catalog-auth-labels.js";
++import { DETERMINISTIC_GATEWAY_PROVIDER } from "./deterministic-gateway-model.js";
+ import { createPreparedModelCatalogProviderNormalizer } from "./model-catalog-provider-normalizer.js";
+@@ -172,10 +173,17 @@ export function createFullModelCatalogAccess(
+     inventory.catalog.routeVariants = inventory.catalog.routeVariants.filter(retain);
+   }
++  const currentCredentials = Object.fromEntries(
++    Object.entries(params.agentFacts.credentials).filter(
++      ([provider]) => normalizeProvider(provider) !== DETERMINISTIC_GATEWAY_PROVIDER,
++    ),
++  );
+   const currentAuth = {
+     authStore: params.agentFacts.authStore,
+-    credentials: params.agentFacts.credentials,
+-    authModes: resolveUsableAgentCredentialModes(params.agentFacts.credentials),
++    credentials: currentCredentials,
++    authModes: resolveUsableAgentCredentialModes(currentCredentials),
+     providerAuthLabels: withPluginRuntimeGenerationScope(
+       {
+         metadataSnapshot: params.pluginGeneration.pluginMetadataSnapshot,
 diff --git a/src/agents/prepared-model-catalog.worker.ts b/src/agents/prepared-model-catalog.worker.ts
 index 00000000..00000000 100644
 --- a/src/agents/prepared-model-catalog.worker.ts
 +++ b/src/agents/prepared-model-catalog.worker.ts
+@@ -41,4 +41,5 @@ import { prepareModelCatalogAuthLabels } from "./model-catalog-auth-labels.js";
+ import { prepareModelCatalogAuthLabels } from "./model-catalog-auth-labels.js";
++import { DETERMINISTIC_GATEWAY_PROVIDER } from "./deterministic-gateway-model.js";
+ import { resolveImplicitProviderDiscoveryScope } from "./models-config.providers.discovery-scope.js";
 @@ -247,8 +247,8 @@ async function runCatalogRequest(
        metadataSnapshot: prepared.pluginGeneration.pluginMetadataSnapshot,
        pluginRegistry: prepared.pluginGeneration.pluginRegistry,
@@ -2982,10 +3013,11 @@ index 00000000..00000000 100644
          resolveAmbientAgentCredentialsForDiscovery({
            config: value.input.config,
            env: value.input.env,
-@@ -266,6 +266,8 @@ async function runCatalogRequest(
+@@ -266,6 +266,9 @@ async function runCatalogRequest(
            ...(value.input.workspaceDir ? { workspaceDir: value.input.workspaceDir } : {}),
          }),
        );
++      delete credentials[DETERMINISTIC_GATEWAY_PROVIDER];
 +      return credentials;
 +    };
      if (request.kind === "auth-refresh") {
