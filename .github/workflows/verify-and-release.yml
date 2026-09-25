@@ -171,20 +171,37 @@ jobs:
         if: steps.core.outputs.needs_build == 'true'
         working-directory: upstream
         run: |
-          tests=(
-            src/agents/deterministic-gateway-model.test.ts
-            test/scripts/runtime-postbuild.test.ts
-            src/config/schema.test.ts
-          )
-          existing=()
-          for test in "${tests[@]}"; do
-            if [[ -f "$test" ]]; then
-              existing+=("$test")
-            else
-              echo "[deterministic] skipping unavailable upstream test: $test"
-            fi
-          done
-          node scripts/run-vitest.mjs "${existing[@]}" --maxWorkers=4
+          node scripts/run-vitest.mjs \
+            src/agents/deterministic-gateway-model.test.ts \
+            src/agents/model-auth-availability.test.ts \
+            src/agents/model-auth-availability.deterministic.test.ts \
+            src/agents/model-catalog-decisions.test.ts \
+            src/agents/mcp-transport-config.test.ts \
+            src/agents/mcp-transport.test.ts \
+            src/auto-reply/reply/directive-handling.defaults.test.ts \
+            src/auto-reply/reply/agent-runner-direct-runtime-config.test.ts \
+            src/plugins/before-agent-reply.test.ts \
+            src/agents/embedded-agent-runner/run.shared-integration.test.ts \
+            src/agents/model-catalog.test.ts \
+            src/agents/model-catalog.planning.test.ts \
+            src/agents/mcp-http-fetch.test.ts \
+            src/config/schema.test.ts \
+            test/scripts/runtime-postbuild.test.ts \
+            src/commands/auth-choice.model-check.test.ts \
+            src/commands/models/list.rows.activation.test.ts \
+            src/plugins/providers.runtime.activation.test.ts \
+            src/plugins/provider-model-routes.cache.test.ts \
+            src/plugins/provider-policy-surface.test.ts \
+            src/plugins/provider-hook-runtime.provenance.test.ts \
+            src/plugins/providers.runtime.owner-completeness.test.ts \
+            src/plugins/providers.runtime.consult-current-snapshot.test.ts \
+            src/config/plugin-auto-enable.core.test.ts \
+            src/commands/model-picker.test.ts \
+            src/agents/prepared-model-catalog-worker.pool.integration.test.ts \
+            src/agents/prepared-model-catalog-worker.secrets.test.ts \
+            extensions/codex/src/session-catalog-backoff.test.ts \
+            extensions/codex/src/session-catalog-index-events.test.ts \
+            extensions/codex/src/session-catalog-index.test.ts --maxWorkers=4
 
       - name: Build OpenClaw
         if: steps.core.outputs.needs_build == 'true'
@@ -201,7 +218,7 @@ jobs:
           node openclaw.mjs --version
           node scripts/check-package-dist-imports.mjs .
 
-      - name: Pack the complete pinned runtime and Codex plugin
+      - name: Pack the complete pinned OpenClaw runtime
         if: steps.core.outputs.needs_build == 'true'
         working-directory: upstream
         shell: bash
@@ -210,11 +227,6 @@ jobs:
           node scripts/package-openclaw-for-docker.mjs \
             --skip-build --allow-unreleased-changelog \
             --output-dir "$GITHUB_WORKSPACE/packed" --output-name openclaw.tgz
-          OPENCLAW_PLUGIN_NPM_PACK_OUTPUT_DIR="$GITHUB_WORKSPACE/packed/codex" \
-            bash scripts/plugin-npm-publish.sh --pack extensions/codex
-          mapfile -t codex_packages < <(find "$GITHUB_WORKSPACE/packed/codex" -maxdepth 1 -name '*.tgz' -type f)
-          test "${#codex_packages[@]}" -eq 1
-          cp "${codex_packages[0]}" "$GITHUB_WORKSPACE/packed/codex.tgz"
 
       - name: Check out Ephemeral selected by Core
         if: steps.core.outputs.needs_build == 'true'
@@ -229,13 +241,12 @@ jobs:
         env:
           UPGRADE_TARGET_SOURCE: ${{ github.workspace }}/upstream
           UPGRADE_TARGET_PACKAGE: ${{ runner.temp }}/selected-runtime/node_modules/openclaw
-          UPGRADE_TARGET_CODEX_PACKAGE: ${{ runner.temp }}/selected-runtime/node_modules/@openclaw/codex
           UPGRADE_TARGET_VERSION: ${{ steps.pins.outputs.version }}
           UPGRADE_TARGET_UPSTREAM_SHA: ${{ steps.pins.outputs.upstream_sha }}
           PYTHONPATH: ${{ github.workspace }}/ephemeral
         run: |
           npm install --prefix "$RUNNER_TEMP/selected-runtime" --ignore-scripts --omit=dev \
-            --no-audit --no-fund "$GITHUB_WORKSPACE/packed/openclaw.tgz" "$GITHUB_WORKSPACE/packed/codex.tgz"
+            --no-audit --no-fund "$GITHUB_WORKSPACE/packed/openclaw.tgz"
           python3 -m unittest discover -s ephemeral/tests -v
           python3 core-source/upgrade-loop/probes/openclaw_config.py
 
@@ -249,7 +260,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts
           python3 .github/scripts/package-runtime.py \
-            packed/openclaw.tgz packed/codex.tgz build.conf "artifacts/$DIST_ASSET"
+            packed/openclaw.tgz build.conf "artifacts/$DIST_ASSET"
           patch_asset="$(basename -- "$PATCH_FILE")"
           cp -- "$PATCH_FILE" "artifacts/$patch_asset"
           cp build.conf artifacts/build.conf
@@ -282,7 +293,7 @@ jobs:
           set -euo pipefail
           tag="$RELEASE_TAG"
           title="OpenClaw ${OPENCLAW_VERSION} deterministic patch"
-          notes="Pinned OpenClaw ${OPENCLAW_VERSION} deterministic patch and complete runtime bundle (OpenClaw plus Codex). Upstream source: ${OPENCLAW_UPSTREAM_SHA}. Build fingerprint: ${BUILD_FINGERPRINT}."
+          notes="Pinned OpenClaw ${OPENCLAW_VERSION} deterministic patch and complete OpenClaw runtime bundle. Plugins are installed by consumers in later layers. Upstream source: ${OPENCLAW_UPSTREAM_SHA}. Build fingerprint: ${BUILD_FINGERPRINT}."
           gh release create "$tag" artifacts/* --target "$PATCH_COMMIT" \
             --title "$title" --notes "$notes" --latest=false
 

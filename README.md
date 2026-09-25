@@ -153,12 +153,13 @@ failures publish nothing. Version selection never follows upstream main or lates
 The automatic check skips unchanged successful inputs and records each new verified
 release and checksum in Core without starting an image build.
 
-The build uses upstream's own complete npm packer and its separate Codex plugin
-packer. This preserves the selected source's file rules, workspace packaging,
-dependency versions and exports. The runtime bundle contains `openclaw.tgz`,
-`codex.tgz`, and a manifest with source identity and checksums. It is not a raw
-source-build `dist` overlay. Ephemeral's unit tests and Core's runtime compatibility
-probe run against this same built selection before publication.
+The build uses upstream's own complete npm packer. This preserves the selected
+source's file rules, workspace packaging, dependency versions and exports. The
+runtime bundle contains only `openclaw.tgz` and a manifest with source identity
+and checksums. OpenClaw plugins are deliberately not part of Deterministic;
+consumers install their required plugins in later image layers. It is not a raw
+source-build `dist` overlay. Ephemeral's unit tests and Core's runtime
+compatibility probe run against this same built selection before publication.
 
 Machine version is `2026.9.6`; the separate display label is
 `2026.9.6-patched`. The updater therefore waits for the next stable version.
@@ -180,10 +181,11 @@ The distribution is intentionally split into three public repositories:
 The current image integration starts at
 [fedora45-ai-safrano9999](https://github.com/safrano9999/fedora45-ai-safrano9999)'s Core layer:
 
-Core installs the verified Deterministic archive directly, then adds Ephemeral
-in a separate step. Ephemeral does not embed or rebuild this package. The Core
-installer validates provenance and archive contents, then installs the complete
-matching npm runtime and Codex plugin. This also updates dependencies and exports.
+Core installs the verified Deterministic archive directly, then adds its pinned
+OpenClaw plugins and Ephemeral in separate steps. Ephemeral does not embed or
+rebuild this package. The Core installer validates provenance and archive
+contents, then installs the complete matching npm runtime. This also updates
+dependencies and exports.
 
 ```text
 ghcr.io/safrano9999/fedora45-ai-core:latest

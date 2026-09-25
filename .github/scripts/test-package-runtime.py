@@ -22,7 +22,6 @@ class RuntimeBundleTests(unittest.TestCase):
             "\nOPENCLAW_BUILD_LABEL=2026.9.5-patched\nOPENCLAW_DETERMINISTIC_RELEASE_TAG=2026.9.5-deterministic.3\n")
         self.output = self.root / "runtime.tar.gz"
         self.package("openclaw.tgz", "openclaw")
-        self.package("codex.tgz", "@openclaw/codex")
 
     def package(self, filename, name, version="2026.9.5"):
         with tarfile.open(self.root / filename, "w:gz") as archive:
@@ -38,7 +37,7 @@ class RuntimeBundleTests(unittest.TestCase):
 
     def bundle(self):
         return subprocess.run([sys.executable, str(Path(__file__).with_name("package-runtime.py")),
-            str(self.root / "openclaw.tgz"), str(self.root / "codex.tgz"), str(self.config), str(self.output)],
+            str(self.root / "openclaw.tgz"), str(self.config), str(self.output)],
             text=True, capture_output=True)
 
     def test_complete_package_bytes_and_stable_identity_are_preserved(self):
@@ -50,17 +49,17 @@ class RuntimeBundleTests(unittest.TestCase):
             self.assertEqual(manifest["version"], "2026.9.5")
             self.assertEqual(manifest["displayVersion"], "2026.9.5-patched")
             self.assertEqual(manifest["upstreamCommit"], "a" * 40)
-            for name in ("openclaw.tgz", "codex.tgz"):
+            for name in ("openclaw.tgz",):
                 data = archive.extractfile(name).read()
                 self.assertEqual(data, (self.root / name).read_bytes())
                 self.assertEqual(hashlib.sha256(data).hexdigest(), manifest["artifacts"][name])
         self.assertEqual(self.bundle().returncode, 0)
         self.assertEqual(self.output.read_bytes(), original)
 
-    def test_mixed_release_plugin_does_not_replace_previous_bundle(self):
+    def test_mixed_release_openclaw_does_not_replace_previous_bundle(self):
         self.assertEqual(self.bundle().returncode, 0)
         original = self.output.read_bytes()
-        self.package("codex.tgz", "@openclaw/codex", "2026.9.4")
+        self.package("openclaw.tgz", "openclaw", "2026.9.4")
         self.assertNotEqual(self.bundle().returncode, 0)
         self.assertEqual(self.output.read_bytes(), original)
 

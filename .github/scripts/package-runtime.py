@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Source of truth: SCRIPTS/githubactions. Generated copies are overwritten.
-"""Bundle upstream-packed OpenClaw and Codex from one pinned source commit."""
+"""Bundle the upstream-packed OpenClaw runtime from one pinned source commit."""
 
 import argparse
 import gzip
@@ -13,7 +13,7 @@ import tarfile
 import tempfile
 
 
-def package_runtime(root: Path, codex: Path, config: Path, destination: Path) -> None:
+def package_runtime(root: Path, config: Path, destination: Path) -> None:
     pins = dict(line.split("=", 1) for line in config.read_text().splitlines()
                 if line and not line.startswith("#"))
     version = pins["OPENCLAW_VERSION"]
@@ -22,15 +22,13 @@ def package_runtime(root: Path, codex: Path, config: Path, destination: Path) ->
         raise ValueError("The update baseline must be a stable numeric version")
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("The upstream source must be an exact commit")
-    artifacts = {"openclaw.tgz": root, "codex.tgz": codex}
-    for filename, expected_name in (("openclaw.tgz", "openclaw"), ("codex.tgz", "@openclaw/codex")):
-        with tarfile.open(artifacts[filename]) as archive:
-            package = json.load(archive.extractfile("package/package.json"))
-            if package["name"] != expected_name or package["version"] != version:
-                raise ValueError(f"Package identity differs from build pins: {filename}")
-            if filename == "openclaw.tgz":
-                archive.getmember("package/dist/deterministic-gateway-replies.txt")
-                archive.getmember("package/dist/control-ui/index.html")
+    artifacts = {"openclaw.tgz": root}
+    with tarfile.open(root) as archive:
+        package = json.load(archive.extractfile("package/package.json"))
+        if package["name"] != "openclaw" or package["version"] != version:
+            raise ValueError("Package identity differs from build pins: openclaw.tgz")
+        archive.getmember("package/dist/deterministic-gateway-replies.txt")
+        archive.getmember("package/dist/control-ui/index.html")
     manifest = {
         "schemaVersion": 1,
         "version": version,
@@ -58,7 +56,7 @@ def package_runtime(root: Path, codex: Path, config: Path, destination: Path) ->
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("root", "codex", "config", "destination"):
+    for name in ("root", "config", "destination"):
         parser.add_argument(name, type=Path)
     args = parser.parse_args()
-    package_runtime(args.root, args.codex, args.config, args.destination)
+    package_runtime(args.root, args.config, args.destination)
