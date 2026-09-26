@@ -9,6 +9,14 @@ from pathlib import Path
 import re
 import subprocess
 
+TARGET_TOOL_PINS = {
+    # OpenClaw 2026.9.4 was released with these exact toolchain pins.
+    "2026.9.4": {
+        "OPENCLAW_PNPM_VERSION": "12.3.4",
+        "OPENCLAW_NODE_VERSION": "26.8.2",
+    },
+}
+
 
 def read_pins(core: Path, build: Path) -> dict[str, str]:
     text = (core / "fedora45-ai-core-pre/Containerfile").read_text()
@@ -39,6 +47,10 @@ def read_pins(core: Path, build: Path) -> dict[str, str]:
             patch_sha = hashlib.sha256(patch_file.read_bytes()).hexdigest()
             pins = re.sub(r"^OPENCLAW_PATCH_FILE=.*$", "OPENCLAW_PATCH_FILE=" + patch_name, pins, flags=re.M)
             pins = re.sub(r"^OPENCLAW_PATCH_SHA256=.*$", "OPENCLAW_PATCH_SHA256=" + patch_sha, pins, flags=re.M)
+        for key, value in TARGET_TOOL_PINS.get(version, {}).items():
+            pins, count = re.subn(r"^" + key + r"=.*$", key + "=" + value, pins, flags=re.M)
+            if count != 1:
+                raise ValueError("Missing toolchain pin: " + key)
     # Reuse the reviewed patch only if it applies and all compatibility tests pass.
     # A new stable clears the Core-pre override; failed tests publish nothing.
     for key, value in {"OPENCLAW_VERSION": version,
