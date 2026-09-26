@@ -67,6 +67,9 @@ def read_pins(core: Path, build: Path) -> dict[str, str]:
     releases = json.loads(subprocess.check_output([
         "gh", "api", "repos/safrano9999/openclaw-deterministic-latest/releases?per_page=100",
     ], text=True))
+    configured = re.findall(r"^OPENCLAW_DETERMINISTIC_RELEASE_TAG=(\d+\.\d+\.\d+-deterministic\.\d+)$", pins, re.M)
+    if len(configured) != 1:
+        raise ValueError("Missing or duplicate Deterministic release pin")
     identity = {"version": version, "upstream": upstream, "ephemeral": ephemeral[0],
                 "patch_source": os.environ["PATCH_COMMIT"],
                 "probes": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
@@ -75,15 +78,14 @@ def read_pins(core: Path, build: Path) -> dict[str, str]:
     asset = f"openclaw-{version}-deterministic.tar.gz"
     for release in releases:
         if (not release.get("draft") and not release.get("prerelease")
-                and release["tag_name"].startswith(version + "-deterministic.")
-                and f"Build fingerprint: {fingerprint}." in (release.get("body") or "")
+                and release["tag_name"] == configured[0]
                 and any(a["name"] == asset and re.fullmatch(r"sha256:[0-9a-f]{64}", a.get("digest", ""))
                         for a in release.get("assets", []))):
             return {"version": version, "upstream_sha": upstream, "ephemeral_sha": ephemeral[0],
                     "needs_build": "false", "fingerprint": fingerprint, "release_tag": release["tag_name"]}
     prefix = version + "-deterministic."
-    configured = re.findall(r"^OPENCLAW_DETERMINISTIC_RELEASE_TAG=" + re.escape(prefix) + r"(\d+)$", pins, re.M)
-    revisions = [int(configured[0]) - 1] if configured else [0]
+    configured_revision = re.fullmatch(re.escape(prefix) + r"(\d+)", configured[0])
+    revisions = [int(configured_revision[1]) - 1] if configured_revision else [0]
     for release in releases:
         tag = release["tag_name"]
         if tag.startswith(prefix) and tag[len(prefix):].isdigit():

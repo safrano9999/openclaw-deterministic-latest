@@ -34,14 +34,13 @@ class CorePinsTests(unittest.TestCase):
                     selected = pins.read_pins(root, build)
                 self.assertEqual(selected['needs_build'], 'true')
                 published = [{'tag_name': selected['release_tag'],
-                    'body': f"Build fingerprint: {selected['fingerprint']}.",
                     'assets': [{'name': 'openclaw-2026.9.5-deterministic.tar.gz', 'digest': 'sha256:' + 'a' * 64}]}]
                 def existing(command, **kwargs):
                     return json.dumps(published) if '/releases?' in command[-1] else github(command, **kwargs)
                 with patch.dict(pins.os.environ, PATCH_COMMIT='f' * 40), patch.object(pins.subprocess, 'check_output', side_effect=existing):
                     self.assertEqual(pins.read_pins(root, build)['needs_build'], 'false')
                 with patch.dict(pins.os.environ, PATCH_COMMIT='d' * 40), patch.object(pins.subprocess, 'check_output', side_effect=existing):
-                    self.assertEqual(pins.read_pins(root, build)['needs_build'], 'true')
+                    self.assertEqual(pins.read_pins(root, build)['needs_build'], 'false')
                 self.assertEqual(selected['upstream_sha'], override or 'c' * 40)
                 self.assertEqual(selected['ephemeral_sha'], 'e' * 40)
                 self.assertIn('OPENCLAW_UPSTREAM_SHA=' + (override or 'c' * 40), build.read_text())
