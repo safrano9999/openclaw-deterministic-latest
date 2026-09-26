@@ -26,6 +26,22 @@ def read_pins(core: Path, build: Path) -> dict[str, str]:
             raise ValueError("Invalid Core-pre source pin: " + name)
         return found[0]
     requested_version = os.environ.get("TARGET_OPENCLAW_VERSION", "").strip()
+    lock_path = core / "upgrade-loop/n8n-sources/versions.lock"
+    locked_version = ""
+    if lock_path.is_file():
+        entries = {}
+        for line in lock_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            match = re.fullmatch(r"([A-Z][A-Z0-9_]*)=(\d+\.\d+\.\d+)", line)
+            if not match or match[1] in entries:
+                raise ValueError("Invalid or duplicate version lock entry: " + line)
+            entries[match[1]] = match[2]
+        locked_version = entries.get("OPENCLAW", "")
+    if locked_version and requested_version and locked_version != requested_version:
+        raise ValueError("TARGET_OPENCLAW_VERSION differs from the OpenClaw lockfile")
+    requested_version = locked_version or requested_version
     if requested_version and not re.fullmatch(r"\d+\.\d+\.\d+", requested_version):
         raise ValueError("Invalid requested OpenClaw target version")
     version = requested_version or arg("OPENCLAW_VERSION", r"\d+\.\d+\.\d+")
