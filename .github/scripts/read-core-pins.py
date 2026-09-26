@@ -28,6 +28,17 @@ def read_pins(core: Path, build: Path) -> dict[str, str]:
     if not re.fullmatch(r"[0-9a-f]{40}", upstream):
         raise ValueError("Selected release did not resolve to a commit")
     pins = build.read_text()
+    if requested_version:
+        patch_candidates = (
+            Path("patches") / f"openclaw-{version}-deterministic-main.patch",
+            Path("patches") / f"openclaw-{version}-deterministic.patch",
+        )
+        patch_file = next((path for path in patch_candidates if path.is_file()), None)
+        if patch_file is not None:
+            patch_name = patch_file.as_posix()
+            patch_sha = hashlib.sha256(patch_file.read_bytes()).hexdigest()
+            pins = re.sub(r"^OPENCLAW_PATCH_FILE=.*$", "OPENCLAW_PATCH_FILE=" + patch_name, pins, flags=re.M)
+            pins = re.sub(r"^OPENCLAW_PATCH_SHA256=.*$", "OPENCLAW_PATCH_SHA256=" + patch_sha, pins, flags=re.M)
     # Reuse the reviewed patch only if it applies and all compatibility tests pass.
     # A new stable clears the Core-pre override; failed tests publish nothing.
     for key, value in {"OPENCLAW_VERSION": version,
