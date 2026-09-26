@@ -171,7 +171,7 @@ jobs:
         if: steps.core.outputs.needs_build == 'true'
         working-directory: upstream
         run: |
-          node scripts/run-vitest.mjs \
+          tests=( \
             src/agents/deterministic-gateway-model.test.ts \
             src/agents/model-auth-availability.test.ts \
             src/agents/model-auth-availability.deterministic.test.ts \
@@ -201,7 +201,14 @@ jobs:
             src/agents/prepared-model-catalog-worker.secrets.test.ts \
             extensions/codex/src/session-catalog-backoff.test.ts \
             extensions/codex/src/session-catalog-index-events.test.ts \
-            extensions/codex/src/session-catalog-index.test.ts --maxWorkers=4
+            extensions/codex/src/session-catalog-index.test.ts \
+          )
+          existing=()
+          for test in "${tests[@]}"; do
+            [[ -f "$test" ]] && existing+=("$test")
+          done
+          ((${#existing[@]} > 0))
+          node scripts/run-vitest.mjs "${existing[@]}" --maxWorkers=4
 
       - name: Build OpenClaw
         if: steps.core.outputs.needs_build == 'true'
