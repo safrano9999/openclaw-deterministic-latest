@@ -161,6 +161,7 @@ jobs:
         run: |
           python3 .github/scripts/test-read-core-pins.py
           python3 .github/scripts/test-package-runtime.py
+          node --test tests/mai-transcribe.test.cjs
 
       - name: Install exact dependencies
         if: steps.core.outputs.needs_build == 'true'
@@ -266,6 +267,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
+          # Brave's official package matches the selected OpenClaw API. MAI is
+          # owned by this exact Deterministic source, not a later image layer.
+          source build.conf
+          npm pack "@openclaw/brave-plugin@${OPENCLAW_VERSION}" --pack-destination packed --json > packed/brave-pack.json
+          npm pack ./plugins/mai-transcribe --pack-destination packed --json > packed/mai-pack.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for name, record in (("brave", "brave-pack.json"), ("mai-transcribe", "mai-pack.json")):
+              rows = json.loads((Path("packed") / record).read_text())
+              assert len(rows) == 1
+              filename = rows[0]["filename"]
+              assert Path(filename).name == filename
+              (Path("packed") / filename).rename(Path("packed") / (name + ".tgz"))
+          PY
           python3 .github/scripts/package-runtime.py \
             packed/openclaw.tgz build.conf "artifacts/$DIST_ASSET"
           patch_asset="$(basename -- "$PATCH_FILE")"
@@ -300,7 +316,7 @@ jobs:
           set -euo pipefail
           tag="$RELEASE_TAG"
           title="OpenClaw ${OPENCLAW_VERSION} deterministic patch"
-          notes="Pinned OpenClaw ${OPENCLAW_VERSION} deterministic patch and complete OpenClaw runtime bundle. Plugins are installed by consumers in later layers. Upstream source: ${OPENCLAW_UPSTREAM_SHA}. Build fingerprint: ${BUILD_FINGERPRINT}."
+          notes="Pinned OpenClaw ${OPENCLAW_VERSION} deterministic runtime with matching Brave and MAI Transcribe plugin archives. Upstream source: ${OPENCLAW_UPSTREAM_SHA}. Build fingerprint: ${BUILD_FINGERPRINT}."
           gh release create "$tag" artifacts/* --target "$PATCH_COMMIT" \
             --title "$title" --notes "$notes" --latest=false
 
