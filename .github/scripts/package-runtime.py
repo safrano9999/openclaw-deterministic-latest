@@ -29,12 +29,29 @@ def package_runtime(root: Path, config: Path, destination: Path) -> None:
             raise ValueError("Package identity differs from build pins: openclaw.tgz")
         archive.getmember("package/dist/deterministic-gateway-replies.txt")
         archive.getmember("package/dist/control-ui/index.html")
+    plugins = {}
+    for plugin_id, package_name, expected_version in (
+        ("brave", "@openclaw/brave-plugin", version),
+        ("mai-transcribe", "openclaw-mai-transcribe-plugin", None),
+    ):
+        filename = plugin_id + ".tgz"
+        artifact = root.with_name(filename)
+        with tarfile.open(artifact) as archive:
+            package = json.load(archive.extractfile("package/package.json"))
+            plugin = json.load(archive.extractfile("package/openclaw.plugin.json"))
+            if (package.get("name") != package_name or plugin.get("id") != plugin_id
+                    or not isinstance(package.get("version"), str)
+                    or (expected_version and package["version"] != expected_version)):
+                raise ValueError("Plugin identity differs from build pins: " + filename)
+        artifacts[filename] = artifact
+        plugins[plugin_id] = {"artifact": filename, "package": package_name, "version": package["version"]}
     manifest = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "version": version,
         "displayVersion": pins["OPENCLAW_BUILD_LABEL"],
         "upstreamCommit": commit,
         "releaseTag": pins["OPENCLAW_DETERMINISTIC_RELEASE_TAG"],
+        "plugins": plugins,
         "artifacts": {name: hashlib.sha256(path.read_bytes()).hexdigest()
                       for name, path in artifacts.items()},
     }

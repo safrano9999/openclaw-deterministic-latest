@@ -22,14 +22,17 @@ class RuntimeBundleTests(unittest.TestCase):
             "\nOPENCLAW_BUILD_LABEL=2026.9.5-patched\nOPENCLAW_DETERMINISTIC_RELEASE_TAG=2026.9.5-deterministic.3\n")
         self.output = self.root / "runtime.tar.gz"
         self.package("openclaw.tgz", "openclaw")
+        self.package("brave.tgz", "@openclaw/brave-plugin", plugin_id="brave")
+        self.package("mai-transcribe.tgz", "openclaw-mai-transcribe-plugin", "0.1.1", plugin_id="mai-transcribe")
 
-    def package(self, filename, name, version="2026.9.5"):
+    def package(self, filename, name, version="2026.9.5", plugin_id=None):
         with tarfile.open(self.root / filename, "w:gz") as archive:
             for path, data in {
                 "package/package.json": json.dumps({"name": name, "version": version,
                     "dependencies": {"zod": "4.6.2"}, "exports": {"./new": "./dist/new.js"}}).encode(),
                 "package/dist/deterministic-gateway-replies.txt": b"dummy reply",
                 "package/dist/control-ui/index.html": b"UI",
+                "package/openclaw.plugin.json": json.dumps({"id": plugin_id}).encode(),
             }.items():
                 member = tarfile.TarInfo(path)
                 member.size = len(data)
@@ -49,7 +52,9 @@ class RuntimeBundleTests(unittest.TestCase):
             self.assertEqual(manifest["version"], "2026.9.5")
             self.assertEqual(manifest["displayVersion"], "2026.9.5-patched")
             self.assertEqual(manifest["upstreamCommit"], "a" * 40)
-            for name in ("openclaw.tgz",):
+            self.assertEqual(manifest["schemaVersion"], 2)
+            self.assertEqual(set(manifest["plugins"]), {"brave", "mai-transcribe"})
+            for name in ("openclaw.tgz", "brave.tgz", "mai-transcribe.tgz"):
                 data = archive.extractfile(name).read()
                 self.assertEqual(data, (self.root / name).read_bytes())
                 self.assertEqual(hashlib.sha256(data).hexdigest(), manifest["artifacts"][name])
@@ -65,6 +70,16 @@ class RuntimeBundleTests(unittest.TestCase):
 
     def test_floating_main_is_not_a_source_pin(self):
         self.config.write_text(self.config.read_text().replace("a" * 40, "main"))
+        self.assertNotEqual(self.bundle().returncode, 0)
+        self.assertFalse(self.output.exists())
+
+    def test_brave_from_another_openclaw_version_is_rejected(self):
+        self.package("brave.tgz", "@openclaw/brave-plugin", "2026.9.6", plugin_id="brave")
+        self.assertNotEqual(self.bundle().returncode, 0)
+        self.assertFalse(self.output.exists())
+
+    def test_missing_mai_prevents_incomplete_release(self):
+        (self.root / "mai-transcribe.tgz").unlink()
         self.assertNotEqual(self.bundle().returncode, 0)
         self.assertFalse(self.output.exists())
 
